@@ -1,0 +1,17 @@
+name: collar_data
+description: >
+  Pure-Dart data layer for the smart pet-collar app. Connects to the collar
+  over WiFi/WebSocket, archives every raw frame to disk, filters/denoises, and
+  exposes a clean sample stream to the UI layer. Zero UI / zero Flutter imports,
+  zero external dependencies — runnable and testable with a bare `dart` SDK.
+version: 0.1.0
+
+environment:
+  sdk: ">=3.0.0 <4.0.0"
+
+# No dependencies on purpose:
+#  * uses only dart:io / dart:async / dart:convert / dart:math
+#  * so `dart run bin/demo.dart` works offline, no phone, no Flutter
+#  * WebSocket uses dart:io's built-in WebSocket (works on Android/iOS/desktop).
+#    If you later need Flutter Web, swap WebSocketCollarDataSource to
+#    package:web_socket_channel — nothing else changes.
