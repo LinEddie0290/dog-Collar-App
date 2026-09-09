@@ -1,231 +1,258 @@
-import 'dart:async';
-import 'dart:io';
-
 import 'package:collar_data/collar_data.dart';
 import 'package:flutter/material.dart';
-import 'package:path_provider/path_provider.dart';
 
+import '../state/collar_controller.dart';
+import 'app_colors.dart';
 import 'conn_status_ja.dart';
+import 'widgets/sparkline.dart';
+import 'widgets/stat_card.dart';
 
-/// 受信テスト画面。
+/// ホーム画面。Design Canvas の叩き台をそのままFlutterに落とし込んだもの。
 ///
-/// 通信・保存・フィルタは全部 package:collar_data (CollarRepository) 任せで、
-/// この画面がやるのは「ボタン操作」と「表示」だけ。
-/// mock/実機の切り替えは、CollarDataSource の実装を差し替えるだけで済む
-/// （FakeCollarDataSource ⇔ WebSocketCollarDataSource）。
-class HomePage extends StatefulWidget {
-  const HomePage({super.key});
+/// 表示に徹していて、通信・保存・フィルタは全部 CollarController(内部で
+/// package:collar_data の CollarRepository)任せ。
+class HomePage extends StatelessWidget {
+  const HomePage({super.key, required this.controller});
 
-  @override
-  State<HomePage> createState() => _HomePageState();
-}
-
-class _HomePageState extends State<HomePage> {
-  CollarRepository? _repo;
-  StreamSubscription<SensorSample>? _sampleSub;
-  StreamSubscription<ConnStatus>? _statusSub;
-
-  bool _useMock = true;
-  final TextEditingController _urlController =
-      TextEditingController(text: 'ws://localhost:8080/ws');
-
-  ConnStatus _status = ConnStatus.disconnected;
-  SensorSample? _latest;
-  int? _lastSeq;
-  int _missedCount = 0;
-  final List<String> _log = <String>[];
-
-  bool get _connected => _repo != null;
-
-  @override
-  void dispose() {
-    unawaited(_teardown());
-    _urlController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _connect() async {
-    await _teardown();
-
-    final CollarDataSource source = _useMock
-        ? FakeCollarDataSource()
-        : WebSocketCollarDataSource(_urlController.text.trim());
-
-    // 受信した生データは、フィルタをかける前にこの中へ jsonl で保存される。
-    final Directory dir = await getApplicationDocumentsDirectory();
-    final repo = CollarRepository(
-      source: source,
-      archive: RawArchive(dir.path),
-    );
-
-    _lastSeq = null;
-    _missedCount = 0;
-
-    _statusSub = repo.status.listen((st) {
-      if (!mounted) return;
-      setState(() => _status = st);
-      _appendLog(st.labelJa);
-    });
-
-    _sampleSub = repo.cleanStream.listen((sample) {
-      if (!mounted) return;
-      setState(() {
-        _latest = sample;
-        final int? seq = sample.seq;
-        if (seq != null && _lastSeq != null && seq > _lastSeq! + 1) {
-          _missedCount += seq - _lastSeq! - 1;
-        }
-        if (seq != null) _lastSeq = seq;
-      });
-    });
-
-    setState(() => _repo = repo);
-    await repo.start();
-  }
-
-  Future<void> _disconnect() async {
-    await _teardown();
-    if (!mounted) return;
-    setState(() => _status = ConnStatus.disconnected);
-  }
-
-  Future<void> _teardown() async {
-    await _sampleSub?.cancel();
-    await _statusSub?.cancel();
-    await _repo?.stop();
-    _sampleSub = null;
-    _statusSub = null;
-    _repo = null;
-  }
-
-  void _appendLog(String message) {
-    final DateTime now = DateTime.now();
-    final String hh = now.hour.toString().padLeft(2, '0');
-    final String mm = now.minute.toString().padLeft(2, '0');
-    final String ss = now.second.toString().padLeft(2, '0');
-    setState(() {
-      _log.insert(0, '[$hh:$mm:$ss] $message');
-      if (_log.length > 50) _log.removeLast();
-    });
-  }
+  final CollarController controller;
 
   @override
   Widget build(BuildContext context) {
-    final SensorSample? sample = _latest;
+    return AnimatedBuilder(
+      animation: controller,
+      builder: (BuildContext context, Widget? _) {
+        final double? hr = controller.latest?.hr;
+        final double? resp = controller.latest?.resp;
+        final int? battery = controller.latest?.battery;
+        final List<double> hrSeries =
+            controller.recent.map((SensorSample s) => s.hr).whereType<double>().toList();
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('首輪アプリ (受信テスト)')),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: <Widget>[
-            SwitchListTile(
-              title: const Text('アプリ内モックを使う'),
-              subtitle: const Text('オフにすると WebSocket URL に接続します'),
-              value: _useMock,
-              onChanged:
-                  _connected ? null : (bool v) => setState(() => _useMock = v),
-            ),
-            TextField(
-              controller: _urlController,
-              enabled: !_useMock && !_connected,
-              decoration: const InputDecoration(
-                labelText: 'WebSocket URL',
-                border: OutlineInputBorder(),
+        return SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: <Widget>[
+              _Header(status: controller.status),
+              const SizedBox(height: 18),
+              _HeartRateCard(value: hr, series: hrSeries),
+              const SizedBox(height: 12),
+              Row(
+                children: <Widget>[
+                  Expanded(
+                    child: StatCard(
+                      icon: Icons.air,
+                      label: '呼吸',
+                      value: resp != null ? resp.round().toString() : '--',
+                      unit: '回/分',
+                      footer: resp != null ? '安定しています' : '受信を待っています',
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: StatCard(
+                      icon: Icons.battery_full,
+                      label: '電池',
+                      value: battery != null ? battery.toString() : '--',
+                      unit: '%',
+                      progress: battery != null ? battery / 100 : null,
+                    ),
+                  ),
+                ],
               ),
-            ),
-            const SizedBox(height: 12),
-            Row(
-              children: <Widget>[
-                Expanded(
-                  child: ElevatedButton(
-                    onPressed: _connected ? null : _connect,
-                    child: const Text('接続する'),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: _connected ? _disconnect : null,
-                    child: const Text('切断する'),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            Text(
-              '状態: ${_status.labelJa}',
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
-            const SizedBox(height: 12),
-            Wrap(
-              spacing: 12,
-              runSpacing: 12,
-              children: <Widget>[
-                _StatTile(
-                  label: '心拍 (hr)',
-                  value: sample?.hr?.toStringAsFixed(1) ?? '--',
-                ),
-                _StatTile(
-                  label: '呼吸 (resp)',
-                  value: sample?.resp?.toStringAsFixed(1) ?? '--',
-                ),
-                _StatTile(
-                  label: '電池 (battery)',
-                  value: sample?.battery?.toString() ?? '--',
-                ),
-                _StatTile(label: '欠落フレーム数', value: '$_missedCount'),
-              ],
-            ),
-            const SizedBox(height: 16),
-            const Text('ログ'),
-            const SizedBox(height: 4),
-            Expanded(
-              child: Container(
-                decoration: BoxDecoration(
-                  border: Border.all(color: Theme.of(context).dividerColor),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                padding: const EdgeInsets.all(8),
-                child: ListView.builder(
-                  itemCount: _log.length,
-                  itemBuilder: (BuildContext context, int index) => Text(
-                    _log[index],
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
-                ),
-              ),
-            ),
-          ],
+              const SizedBox(height: 12),
+              const _BarkPlaceholderCard(),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _Header extends StatelessWidget {
+  const _Header({required this.status});
+
+  final ConnStatus status;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: <Widget>[
+        Container(
+          width: 50,
+          height: 50,
+          decoration: BoxDecoration(
+            gradient: AppColors.heroGradient,
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: const Icon(Icons.pets, color: Color(0xFFFFF7EF), size: 24),
         ),
+        const SizedBox(width: 12),
+        const Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Text(
+                'モモ',
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700, fontStyle: FontStyle.italic),
+              ),
+              SizedBox(height: 1),
+              Text('柴犬・2歳', style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+            ],
+          ),
+        ),
+        _StatusPill(status: status),
+      ],
+    );
+  }
+}
+
+class _StatusPill extends StatelessWidget {
+  const _StatusPill({required this.status});
+
+  final ConnStatus status;
+
+  @override
+  Widget build(BuildContext context) {
+    final Color dot = switch (status) {
+      ConnStatus.connected => AppColors.connected,
+      ConnStatus.disconnected => AppColors.textFaint,
+      ConnStatus.connecting || ConnStatus.reconnecting => AppColors.accent2,
+    };
+    return Container(
+      padding: const EdgeInsets.fromLTRB(9, 7, 12, 7),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        border: Border.all(color: AppColors.border),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          Container(width: 8, height: 8, decoration: BoxDecoration(color: dot, shape: BoxShape.circle)),
+          const SizedBox(width: 6),
+          Text(status.labelJa, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+        ],
       ),
     );
   }
 }
 
-class _StatTile extends StatelessWidget {
-  const _StatTile({required this.label, required this.value});
+class _HeartRateCard extends StatelessWidget {
+  const _HeartRateCard({required this.value, required this.series});
 
-  final String label;
-  final String value;
+  final double? value;
+  final List<double> series;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      constraints: const BoxConstraints(minWidth: 140),
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.fromLTRB(22, 22, 22, 18),
       decoration: BoxDecoration(
-        border: Border.all(color: Theme.of(context).dividerColor),
-        borderRadius: BorderRadius.circular(8),
+        gradient: AppColors.heroGradient,
+        borderRadius: BorderRadius.circular(28),
+        boxShadow: <BoxShadow>[
+          BoxShadow(color: AppColors.accent.withOpacity(0.35), blurRadius: 30, offset: const Offset(0, 14)),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
         children: <Widget>[
-          Text(label, style: Theme.of(context).textTheme.bodySmall),
-          const SizedBox(height: 4),
-          Text(value, style: Theme.of(context).textTheme.headlineSmall),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: <Widget>[
+              const Row(
+                children: <Widget>[
+                  Icon(Icons.favorite, color: Color(0xFFFFF7EF), size: 17),
+                  SizedBox(width: 7),
+                  Text('心拍数', style: TextStyle(color: Color(0xFFFFF7EF), fontSize: 13, fontWeight: FontWeight.w700)),
+                ],
+              ),
+              Text(
+                value != null ? 'たった今' : '未受信',
+                style: const TextStyle(color: Color(0xE6FFF7EF), fontSize: 12),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.baseline,
+            textBaseline: TextBaseline.alphabetic,
+            children: <Widget>[
+              Text(
+                value != null ? value!.round().toString() : '--',
+                style: const TextStyle(
+                  color: Color(0xFFFFF7EF),
+                  fontSize: 60,
+                  fontWeight: FontWeight.w700,
+                  fontStyle: FontStyle.italic,
+                ),
+              ),
+              const SizedBox(width: 8),
+              const Text('bpm', style: TextStyle(color: Color(0xE6FFF7EF), fontSize: 16, fontWeight: FontWeight.w600)),
+            ],
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            height: 44,
+            child: series.length > 1
+                ? Sparkline(values: series, color: const Color(0xFFFFF7EF))
+                : const SizedBox.shrink(),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _BarkPlaceholderCard extends StatelessWidget {
+  const _BarkPlaceholderCard();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: const Color(0xFFE7D8C6)),
+      ),
+      child: Row(
+        children: <Widget>[
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(color: const Color(0xFFFBF1E6), borderRadius: BorderRadius.circular(14)),
+            child: const Icon(Icons.chat_bubble_outline, color: AppColors.accent, size: 22),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Row(
+                  children: <Widget>[
+                    const Text('鳴き声・感情翻訳', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                      decoration: BoxDecoration(color: const Color(0xFFFBF1E6), borderRadius: BorderRadius.circular(999)),
+                      child: const Text(
+                        '近日公開',
+                        style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: AppColors.accent),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 3),
+                const Text(
+                  '鳴き声から気持ちを読み取る機能を開発中です',
+                  style: TextStyle(fontSize: 12, color: AppColors.textSecondary, height: 1.4),
+                ),
+              ],
+            ),
+          ),
+          const Icon(Icons.chevron_right, color: Color(0xFFC9BCAF), size: 18),
         ],
       ),
     );
