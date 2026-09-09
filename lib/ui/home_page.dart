@@ -1,9 +1,9 @@
 import 'package:collar_data/collar_data.dart';
 import 'package:flutter/material.dart';
 
+import '../l10n/app_strings.dart';
 import '../state/collar_controller.dart';
 import 'app_colors.dart';
-import 'conn_status_ja.dart';
 import 'widgets/sparkline.dart';
 import 'widgets/stat_card.dart';
 
@@ -21,6 +21,7 @@ class HomePage extends StatelessWidget {
     return AnimatedBuilder(
       animation: controller,
       builder: (BuildContext context, Widget? _) {
+        final AppStrings strings = AppStringsScope.of(context);
         final double? hr = controller.latest?.hr;
         final double? resp = controller.latest?.resp;
         final int? battery = controller.latest?.battery;
@@ -32,26 +33,26 @@ class HomePage extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: <Widget>[
-              _Header(status: controller.status),
+              _Header(status: controller.status, strings: strings),
               const SizedBox(height: 18),
-              _HeartRateCard(value: hr, series: hrSeries),
+              _HeartRateCard(value: hr, series: hrSeries, strings: strings),
               const SizedBox(height: 12),
               Row(
                 children: <Widget>[
                   Expanded(
                     child: StatCard(
                       icon: Icons.air,
-                      label: '呼吸',
+                      label: strings.respirationLabel,
                       value: resp != null ? resp.round().toString() : '--',
-                      unit: '回/分',
-                      footer: resp != null ? '安定しています' : '受信を待っています',
+                      unit: strings.breathsPerMinUnit,
+                      footer: resp != null ? strings.stableStatus : strings.waitingForData,
                     ),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
                     child: StatCard(
                       icon: Icons.battery_full,
-                      label: '電池',
+                      label: strings.batteryLabel,
                       value: battery != null ? battery.toString() : '--',
                       unit: '%',
                       progress: battery != null ? battery / 100 : null,
@@ -60,7 +61,7 @@ class HomePage extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 12),
-              const _BarkPlaceholderCard(),
+              _BarkPlaceholderCard(strings: strings),
             ],
           ),
         );
@@ -70,9 +71,10 @@ class HomePage extends StatelessWidget {
 }
 
 class _Header extends StatelessWidget {
-  const _Header({required this.status});
+  const _Header({required this.status, required this.strings});
 
   final ConnStatus status;
+  final AppStrings strings;
 
   @override
   Widget build(BuildContext context) {
@@ -88,29 +90,30 @@ class _Header extends StatelessWidget {
           child: const Icon(Icons.pets, color: Color(0xFFFFF7EF), size: 24),
         ),
         const SizedBox(width: 12),
-        const Expanded(
+        Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
               Text(
-                'モモ',
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700, fontStyle: FontStyle.italic),
+                strings.petName,
+                style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700, fontStyle: FontStyle.italic),
               ),
-              SizedBox(height: 1),
-              Text('柴犬・2歳', style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+              const SizedBox(height: 1),
+              Text(strings.petBreedAge, style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
             ],
           ),
         ),
-        _StatusPill(status: status),
+        _StatusPill(status: status, strings: strings),
       ],
     );
   }
 }
 
 class _StatusPill extends StatelessWidget {
-  const _StatusPill({required this.status});
+  const _StatusPill({required this.status, required this.strings});
 
   final ConnStatus status;
+  final AppStrings strings;
 
   @override
   Widget build(BuildContext context) {
@@ -131,7 +134,7 @@ class _StatusPill extends StatelessWidget {
         children: <Widget>[
           Container(width: 8, height: 8, decoration: BoxDecoration(color: dot, shape: BoxShape.circle)),
           const SizedBox(width: 6),
-          Text(status.labelJa, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+          Text(strings.connStatusLabel(status), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
         ],
       ),
     );
@@ -139,10 +142,11 @@ class _StatusPill extends StatelessWidget {
 }
 
 class _HeartRateCard extends StatelessWidget {
-  const _HeartRateCard({required this.value, required this.series});
+  const _HeartRateCard({required this.value, required this.series, required this.strings});
 
   final double? value;
   final List<double> series;
+  final AppStrings strings;
 
   @override
   Widget build(BuildContext context) {
@@ -161,15 +165,15 @@ class _HeartRateCard extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: <Widget>[
-              const Row(
+              Row(
                 children: <Widget>[
-                  Icon(Icons.favorite, color: Color(0xFFFFF7EF), size: 17),
-                  SizedBox(width: 7),
-                  Text('心拍数', style: TextStyle(color: Color(0xFFFFF7EF), fontSize: 13, fontWeight: FontWeight.w700)),
+                  const Icon(Icons.favorite, color: Color(0xFFFFF7EF), size: 17),
+                  const SizedBox(width: 7),
+                  Text(strings.heartRateLabel, style: const TextStyle(color: Color(0xFFFFF7EF), fontSize: 13, fontWeight: FontWeight.w700)),
                 ],
               ),
               Text(
-                value != null ? 'たった今' : '未受信',
+                value != null ? strings.justNow : strings.notReceivedYet,
                 style: const TextStyle(color: Color(0xE6FFF7EF), fontSize: 12),
               ),
             ],
@@ -206,7 +210,9 @@ class _HeartRateCard extends StatelessWidget {
 }
 
 class _BarkPlaceholderCard extends StatelessWidget {
-  const _BarkPlaceholderCard();
+  const _BarkPlaceholderCard({required this.strings});
+
+  final AppStrings strings;
 
   @override
   Widget build(BuildContext context) {
@@ -232,22 +238,22 @@ class _BarkPlaceholderCard extends StatelessWidget {
               children: <Widget>[
                 Row(
                   children: <Widget>[
-                    const Text('鳴き声・感情翻訳', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
+                    Text(strings.barkTranslationTitle, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
                     const SizedBox(width: 8),
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                       decoration: BoxDecoration(color: const Color(0xFFFBF1E6), borderRadius: BorderRadius.circular(999)),
-                      child: const Text(
-                        '近日公開',
-                        style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: AppColors.accent),
+                      child: Text(
+                        strings.comingSoon,
+                        style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: AppColors.accent),
                       ),
                     ),
                   ],
                 ),
                 const SizedBox(height: 3),
-                const Text(
-                  '鳴き声から気持ちを読み取る機能を開発中です',
-                  style: TextStyle(fontSize: 12, color: AppColors.textSecondary, height: 1.4),
+                Text(
+                  strings.barkTranslationDesc,
+                  style: const TextStyle(fontSize: 12, color: AppColors.textSecondary, height: 1.4),
                 ),
               ],
             ),
