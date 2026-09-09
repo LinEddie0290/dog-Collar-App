@@ -152,7 +152,7 @@ class _HeartRateCard extends StatelessWidget {
         gradient: AppColors.heroGradient,
         borderRadius: BorderRadius.circular(28),
         boxShadow: <BoxShadow>[
-          BoxShadow(color: AppColors.accent.withOpacity(0.35), blurRadius: 30, offset: const Offset(0, 14)),
+          BoxShadow(color: AppColors.accent.withValues(alpha: 0.35), blurRadius: 30, offset: const Offset(0, 14)),
         ],
       ),
       child: Column(

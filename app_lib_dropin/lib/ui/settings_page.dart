@@ -78,10 +78,7 @@ class _SettingsPageState extends State<SettingsPage> {
                           activeTrackColor: AppColors.accent,
                           onChanged: controller.isConnected
                               ? null
-                              : (bool value) {
-                                  controller.useMock = value;
-                                  controller.notifyListeners();
-                                },
+                              : controller.setUseMock,
                         ),
                       ],
                     ),
@@ -109,7 +106,7 @@ class _SettingsPageState extends State<SettingsPage> {
                             ),
                             hintText: 'ws://192.168.x.x:8080/ws',
                           ),
-                          onChanged: (String value) => controller.url = value,
+                          onChanged: controller.setUrl,
                         ),
                       ],
                     ),
