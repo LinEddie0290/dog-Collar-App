@@ -3,7 +3,7 @@
 /// The UI layer imports only this file and works against [CollarRepository]:
 /// subscribe to `cleanStream` + `status`, read `recent`. It never sees sockets,
 /// JSON, or files.
-library collar_data;
+library;
 
 export 'src/conn_status.dart';
 export 'src/raw_frame.dart';

@@ -1,3 +1,6 @@
+// ignore_for_file: avoid_print
+// このファイルは `dart run bin/demo.dart` で動作確認するための CLI。
+// print が出力そのものなので avoid_print はここでは適用しない。
 import 'dart:io';
 
 import 'package:collar_geo/collar_geo.dart';

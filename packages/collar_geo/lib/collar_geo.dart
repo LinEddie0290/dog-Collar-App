@@ -5,7 +5,7 @@
 ///   * [distanceMeters] / [GeofenceConfig] / [GeofenceTracker] / [GeofenceEvent]
 ///     for the "did the dog leave the yard" logic
 ///   * [circleToPolygon] to draw a geofence circle on the map
-library collar_geo;
+library;
 
 export 'src/circle_polygon.dart';
 export 'src/gcj02.dart';

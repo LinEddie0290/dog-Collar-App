@@ -1,3 +1,6 @@
+// ignore_for_file: avoid_print
+// このファイルは `dart run bin/demo.dart` で動作確認するための CLI。
+// print が出力そのものなので avoid_print はここでは適用しない。
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
