@@ -3,8 +3,10 @@ import 'package:flutter/material.dart';
 import '../l10n/app_strings.dart';
 import '../state/collar_controller.dart';
 import '../state/locale_controller.dart';
+import '../state/location_controller.dart';
 import 'history_page.dart';
 import 'home_page.dart';
+import 'map_page.dart';
 import 'settings_page.dart';
 
 class RootShell extends StatefulWidget {
@@ -12,10 +14,12 @@ class RootShell extends StatefulWidget {
     super.key,
     required this.controller,
     required this.localeController,
+    required this.locationController,
   });
 
   final CollarController controller;
   final LocaleController localeController;
+  final LocationController locationController;
 
   @override
   State<RootShell> createState() => _RootShellState();
@@ -30,6 +34,7 @@ class _RootShellState extends State<RootShell> {
 
     final List<Widget> pages = <Widget>[
       HomePage(controller: widget.controller),
+      MapPage(controller: widget.controller, locationController: widget.locationController),
       HistoryPage(controller: widget.controller),
       SettingsPage(
         controller: widget.controller,
@@ -47,6 +52,7 @@ class _RootShellState extends State<RootShell> {
         onDestinationSelected: (int i) => setState(() => _index = i),
         destinations: <NavigationDestination>[
           NavigationDestination(icon: const Icon(Icons.home), label: strings.navHome),
+          NavigationDestination(icon: const Icon(Icons.map_outlined), label: strings.navMap),
           NavigationDestination(icon: const Icon(Icons.history), label: strings.navHistory),
           NavigationDestination(icon: const Icon(Icons.settings), label: strings.navSettings),
         ],

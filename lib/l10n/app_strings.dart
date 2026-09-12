@@ -55,6 +55,11 @@ class AppStrings {
     required this.connConnecting,
     required this.connConnected,
     required this.connReconnecting,
+    required this.navMap,
+    required this.mapNotConfiguredTitle,
+    required this.mapNotConfiguredDesc,
+    required this.waitingForLocation,
+    required this.lastKnownLocationPrefix,
   });
 
   final AppLanguage language;
@@ -112,6 +117,12 @@ class AppStrings {
   final String connConnected;
   final String connReconnecting;
 
+  final String navMap;
+  final String mapNotConfiguredTitle;
+  final String mapNotConfiguredDesc;
+  final String waitingForLocation;
+  final String lastKnownLocationPrefix;
+
   /// 履歴画面の「直近N件」表示(言語によって語順が違うので関数にしている)。
   String recentCountLabel(int count) {
     switch (language) {
@@ -134,6 +145,52 @@ class AppStrings {
         return connConnected;
       case ConnStatus.reconnecting:
         return connReconnecting;
+    }
+  }
+
+  /// GPSの精度表示 (例: "精度 ±5m")。
+  String gpsAccuracyLabel(int meters) {
+    switch (language) {
+      case AppLanguage.ja:
+        return '精度 ±${meters}m';
+      case AppLanguage.en:
+        return '±${meters}m accuracy';
+      case AppLanguage.zh:
+        return '精度 ±$meters米';
+    }
+  }
+
+  /// "N分前" 表示。1分未満は justNow を使う想定(この関数は呼ばない)。
+  String minutesAgoLabel(int minutes) {
+    switch (language) {
+      case AppLanguage.ja:
+        return '$minutes分前';
+      case AppLanguage.en:
+        return minutes == 1 ? '1 minute ago' : '$minutes minutes ago';
+      case AppLanguage.zh:
+        return '$minutes分钟前';
+    }
+  }
+
+  String geofenceExitMessage(String fenceName) {
+    switch (language) {
+      case AppLanguage.ja:
+        return '$fenceNameの範囲から離れました';
+      case AppLanguage.en:
+        return 'Left the $fenceName area';
+      case AppLanguage.zh:
+        return '已离开$fenceName范围';
+    }
+  }
+
+  String geofenceEnterMessage(String fenceName) {
+    switch (language) {
+      case AppLanguage.ja:
+        return '$fenceNameの範囲に戻りました';
+      case AppLanguage.en:
+        return 'Back in the $fenceName area';
+      case AppLanguage.zh:
+        return '已回到$fenceName范围';
     }
   }
 
@@ -196,6 +253,11 @@ class AppStrings {
     connConnecting: '接続中…',
     connConnected: '接続済み',
     connReconnecting: '再接続中…',
+    navMap: '地図',
+    mapNotConfiguredTitle: '地図の設定が必要です',
+    mapNotConfiguredDesc: '高徳地図のAPIキーを設定すると、ここに現在地が表示されます。',
+    waitingForLocation: '位置情報の受信を待っています',
+    lastKnownLocationPrefix: '最後に確認された位置',
   );
 
   static const AppStrings _en = AppStrings(
@@ -248,6 +310,12 @@ class AppStrings {
     connConnecting: 'Connecting…',
     connConnected: 'Connected',
     connReconnecting: 'Reconnecting…',
+    navMap: 'Map',
+    mapNotConfiguredTitle: 'Map setup required',
+    mapNotConfiguredDesc:
+        'Set up an Amap API key to see the current location here.',
+    waitingForLocation: 'Waiting for a location fix',
+    lastKnownLocationPrefix: 'Last known location',
   );
 
   static const AppStrings _zh = AppStrings(
@@ -298,6 +366,11 @@ class AppStrings {
     connConnecting: '连接中…',
     connConnected: '已连接',
     connReconnecting: '重新连接中…',
+    navMap: '地图',
+    mapNotConfiguredTitle: '需要配置地图',
+    mapNotConfiguredDesc: '配置高德地图 API Key 后，这里会显示当前位置。',
+    waitingForLocation: '等待位置信息',
+    lastKnownLocationPrefix: '最后已知位置',
   );
 }
 

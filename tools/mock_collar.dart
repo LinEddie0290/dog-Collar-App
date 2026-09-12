@@ -47,9 +47,22 @@ Future<void> _pushReadings(WebSocket socket) async {
   int sequence = 0;
   double heartRate = 90;
 
+  // GPS はプレースホルダーの原点付近をゆっくりランダムウォークする。実際の
+  // 「家」の座標ではないので、地理囲いのテストをするときは
+  // LocationController.setHomeFence() で合わせた座標を設定すること。
+  double gpsLat = 31.2304;
+  double gpsLng = 121.4737;
+
   final Timer timer = Timer.periodic(const Duration(seconds: 1), (Timer _) {
     heartRate += (random.nextDouble() - 0.5) * 6;
     heartRate = heartRate.clamp(60.0, 130.0);
+
+    // GPS は心拍/IMUよりずっと低頻度という想定(5秒に1回程度)。
+    final bool hasGpsFix = sequence % 5 == 0;
+    if (hasGpsFix) {
+      gpsLat += (random.nextDouble() - 0.5) * 0.00003;
+      gpsLng += (random.nextDouble() - 0.5) * 0.00003;
+    }
 
     final Map<String, Object?> payload = <String, Object?>{
       'v': 1,
@@ -64,6 +77,9 @@ Future<void> _pushReadings(WebSocket socket) async {
         'az': _round3((random.nextDouble() - 0.5) * 0.2),
       },
       'battery': 78,
+      if (hasGpsFix) 'lat': _round6(gpsLat),
+      if (hasGpsFix) 'lng': _round6(gpsLng),
+      if (hasGpsFix) 'gps_accuracy_m': 5 + random.nextInt(10),
     };
 
     socket.add(jsonEncode(payload));
@@ -75,6 +91,8 @@ Future<void> _pushReadings(WebSocket socket) async {
 }
 
 double _round3(double value) => (value * 1000).roundToDouble() / 1000;
+
+double _round6(double value) => (value * 1000000).roundToDouble() / 1000000;
 
 Future<List<String>> _localIpAddresses() async {
   final List<NetworkInterface> interfaces =

@@ -37,6 +37,12 @@ dependencies:
 
   collar_data:
     path: packages/collar_data
+  collar_geo:
+    path: packages/collar_geo
+  amap_map: ^1.0.15
+  # amap_map の土台。LatLng / AMapApiKey などを直接 import しているので、
+  # 推移的依存に頼らず明示的に書いておく(depend_on_referenced_packages 対策)。
+  x_amap_base: ^1.0.3
   path_provider: ^2.1.1
   shared_preferences: ^2.3.2
   flutter_localizations:

@@ -1,4 +1,15 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- 高徳地図 SDK に必要な権限(amap_map の example アプリの設定に準拠)。
+         INTERNET は地図タイルの取得にも、首輪への WebSocket 接続にも必須。
+         位置情報の権限は「地図に自分の現在地を出す」ために使う。首輪の GPS
+         座標そのものは首輪から送られてくるので、この権限が無くても犬の位置は
+         表示できる(自分の位置が出ないだけ)。 -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+
     <application
         android:label="collar_app"
         android:name="${applicationName}"

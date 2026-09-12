@@ -13,7 +13,9 @@ import 'package:collar_data/collar_data.dart';
 ///   1. every raw frame was archived to disk (before filtering),
 ///   2. the nullable HR path is actually exercised (some frames have no HR),
 ///   3. filtering reduces jitter (variance down),
-///   4. a simulated dropout produces a `reconnecting` -> `connected` cycle.
+///   4. a simulated dropout produces a `reconnecting` -> `connected` cycle,
+///   5. GPS fixes show up on some (not all) frames, and lat/lng survive the
+///      filter stage unchanged (GPS is not filtered, see filters.dart).
 Future<void> main() async {
   final tmp = await Directory.systemTemp.createTemp('collar_demo_');
   print('archive dir: ${tmp.path}\n');
@@ -34,6 +36,7 @@ Future<void> main() async {
   final filtHrSeq = <double?>[];
   var hrNulls = 0;
   var samples = 0;
+  var gpsFixes = 0;
 
   final statuses = <ConnStatus>[];
   final statusSub = repo.status.listen((s) {
@@ -44,6 +47,7 @@ Future<void> main() async {
   final cleanSub = repo.cleanStream.listen((s) {
     samples++;
     if (s.hr == null) hrNulls++;
+    if (s.hasLocation) gpsFixes++;
     filtHrSeq.add(s.hr);
   });
 
@@ -72,6 +76,7 @@ Future<void> main() async {
   print('samples emitted      : $samples');
   print('archived raw lines   : $archivedLines');
   print('frames with null hr  : $hrNulls');
+  print('frames with gps fix  : $gpsFixes');
   print('status transitions   : $statuses');
   print('raw hr jitter        : ${rawJitter.toStringAsFixed(3)}');
   print('filtered hr jitter   : ${filtJitter.toStringAsFixed(3)}');
@@ -84,6 +89,9 @@ Future<void> main() async {
   _check(statuses.contains(ConnStatus.reconnecting),
       'a simulated dropout must surface as reconnecting');
   _check(statuses.contains(ConnStatus.connected), 'must reach connected');
+  _check(gpsFixes > 0, 'GPS fixes must show up on at least some frames');
+  _check(gpsFixes < samples,
+      'GPS fixes must NOT show up on every frame (lower rate than IMU/HR)');
 
   await tmp.delete(recursive: true);
   print('\nALL CHECKS PASSED ✅');

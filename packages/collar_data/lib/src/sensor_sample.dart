@@ -17,6 +17,19 @@ import 'raw_frame.dart';
 /// value and the filter would treat it as real data — a phantom dip. `null`
 /// makes "no reading" explicit and honest: the filter skips it, and the UI can
 /// draw a gap instead of inventing a point. Missing stays missing.
+///
+/// GPS fields (lat / lng / gpsAccuracyM) — added for the location feature.
+/// -------------------------------------------------------------------------
+/// ⚠️ This is a change to the two-person contract (see ../../README.md
+/// "SensorSample 是两人接口，数据侧改字段会提前通知") — please confirm the
+/// raw JSON key names (`lat` / `lng` / `gps_accuracy_m`) match what the
+/// collar firmware actually sends once that's finalized. The change is
+/// purely additive (new nullable fields, same null-means-no-reading
+/// convention as hr/resp) so it should not break anything already reading
+/// this class, but the firmware-side field names are a guess until confirmed.
+/// GPS fixes are expected to arrive far less often than IMU/HR frames (GPS
+/// draws much more power), so most frames will have `lat`/`lng` as null —
+/// that's normal, not an error.
 class SensorSample {
   /// Phone receive time (epoch ms) — always present, our trustworthy clock.
   final int rxTs;
@@ -34,6 +47,15 @@ class SensorSample {
   final double? az;
   final int? battery;
 
+  /// WGS84 latitude, if this frame carried a GPS fix.
+  final double? lat;
+
+  /// WGS84 longitude, if this frame carried a GPS fix.
+  final double? lng;
+
+  /// GPS fix accuracy in meters, if the collar reports it.
+  final double? gpsAccuracyM;
+
   const SensorSample({
     required this.rxTs,
     this.deviceTs,
@@ -44,6 +66,9 @@ class SensorSample {
     this.ay,
     this.az,
     this.battery,
+    this.lat,
+    this.lng,
+    this.gpsAccuracyM,
   });
 
   /// Parse a [RawFrame] into a sample. Anything missing or wrong-typed becomes
@@ -64,8 +89,14 @@ class SensorSample {
       ay: isMap ? d(imu['ay']) : null,
       az: isMap ? d(imu['az']) : null,
       battery: i(r['battery']),
+      lat: d(r['lat']),
+      lng: d(r['lng']),
+      gpsAccuracyM: d(r['gps_accuracy_m']),
     );
   }
+
+  /// Does this sample carry a GPS fix? (both lat and lng present)
+  bool get hasLocation => lat != null && lng != null;
 
   SensorSample copyWith({
     double? hr,
@@ -76,6 +107,9 @@ class SensorSample {
   }) {
     // Note: these params are the *filtered* values; nulls are meaningful
     // (no reading), so we pass them straight through rather than ??-coalescing.
+    // lat/lng/gpsAccuracyM are NOT filtered (see filters.dart — GPS points
+    // pass through untouched, smoothing is the map/geofence layer's job, not
+    // this pipeline's), so they're carried over unchanged from `this`.
     return SensorSample(
       rxTs: rxTs,
       deviceTs: deviceTs,
@@ -86,11 +120,14 @@ class SensorSample {
       ay: ay,
       az: az,
       battery: battery,
+      lat: lat,
+      lng: lng,
+      gpsAccuracyM: gpsAccuracyM,
     );
   }
 
   @override
   String toString() =>
       'SensorSample(rxTs:$rxTs seq:$seq hr:$hr resp:$resp '
-      'imu:[$ax,$ay,$az] batt:$battery)';
+      'imu:[$ax,$ay,$az] batt:$battery loc:${hasLocation ? '($lat,$lng)' : 'none'})';
 }

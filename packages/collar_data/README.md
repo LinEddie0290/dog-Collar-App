@@ -124,3 +124,20 @@ final repo = CollarRepository(
 也让这个包无需联网 `pub get` 就能 `dart run`。以后要支持 Flutter Web 再换
 `package:web_socket_channel`,`WebSocketCollarDataSource` 内部一换即可,接口不变。
 ```
+
+## GPS 字段（`lat` / `lng` / `gps_accuracy_m`）
+
+⚠️ **这是对两人接口的改动，请确认固件那边的字段名和这里假设的一致。**
+
+`SensorSample` 新增了三个可空字段：`lat` / `lng`（WGS84，度）、`gpsAccuracyM`
+（定位精度，米）。解析方式和 `hr`/`resp` 一样：JSON 里没有这个字段就是
+`null`，代表"这一帧没有 GPS 读数"——这是预期行为，不是 bug。GPS 芯片耗电远
+高于加速度计，真实固件大概率不会每一帧都带位置，所以下游（地图、围栏判断）
+从一开始就要按"大多数帧没有位置"来设计，不能假设每帧都有。
+
+`FakeCollarDataSource` 现在也会按 `gpsFixEvery`（默认每 10 帧一次）在原点
+附近做一个小范围随机游走，模拟真实的 GPS 抖动，方便在没有硬件的情况下开发
+和测试地图/围栏功能。
+
+坐标转换（WGS84 -> 高德要的 GCJ-02）、围栏进出判断不属于这一层的职责，见
+`../collar_geo`。
