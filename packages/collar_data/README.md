@@ -66,7 +66,7 @@ final repo = CollarRepository(
 await repo.start();
 
 repo.cleanStream.listen((SensorSample s) {
-  // s.hr / s.resp / s.ax... 都是 double?(可能为 null=本帧无读数)
+  // s.bodyTempC / s.ax... 都是 double?(可能为 null=本帧无读数)
   // 画图 / 显示
 });
 repo.status.listen((ConnStatus st) {
@@ -125,19 +125,30 @@ final repo = CollarRepository(
 `package:web_socket_channel`,`WebSocketCollarDataSource` 内部一换即可,接口不变。
 ```
 
-## GPS 字段（`lat` / `lng` / `gps_accuracy_m`）
+## GPS 字段（`lat` / `lng` / `fixQuality` / `satellites` / `hdop`）
 
-⚠️ **这是对两人接口的改动，请确认固件那边的字段名和这里假设的一致。**
+⚠️ **2026-09-12：这一节已按真实固件改写，详见根目录 `PROTOCOL_CHANGE.md`。**
 
-`SensorSample` 新增了三个可空字段：`lat` / `lng`（WGS84，度）、`gpsAccuracyM`
-（定位精度，米）。解析方式和 `hr`/`resp` 一样：JSON 里没有这个字段就是
-`null`，代表"这一帧没有 GPS 读数"——这是预期行为，不是 bug。GPS 芯片耗电远
-高于加速度计，真实固件大概率不会每一帧都带位置，所以下游（地图、围栏判断）
-从一开始就要按"大多数帧没有位置"来设计，不能假设每帧都有。
+之前这里假设固件发 `lat` / `lng` / `gps_accuracy_m` 三个 JSON 字段，并标注了
+"请确认字段名"。确认结果是：**固件根本不发 JSON**。设备是 BLE 专用的
+nRF54LM20A，GPS 数据以**原始 NMEA 语句**的形式发过来，由 App 自己解析
+（见 `pet_sample.dart` 和 `../collar_geo/lib/src/nmea.dart`）。
 
-`FakeCollarDataSource` 现在也会按 `gpsFixEvery`（默认每 10 帧一次）在原点
-附近做一个小范围随机游走，模拟真实的 GPS 抖动，方便在没有硬件的情况下开发
-和测试地图/围栏功能。
+所以字段改成了：`lat` / `lng`（WGS84，度）、`fixQuality`（GGA 定位质量，
+0 = 未定位）、`satellites`（参与解算的卫星数）、`hdop`（水平精度因子）。
+**`gpsAccuracyM` 已删除——固件不提供任何以米为单位的精度值。** HDOP 是无量纲
+的倍数，不是距离；`estimatedAccuracyM`（`HDOP × 5m`）只是画圈用的粗略估算，
+UI 上必须标明是估算值。
+
+最关键的一点：**收到格式正确的 NMEA 不等于已经定位。** 2026-09-11 的台面
+测试收到 1,200 条合法语句，其中 GGA 全部是 fix quality 0、0 颗卫星，RMC 全部
+是状态 V——因为在室内。所以 `hasLocation` 除了检查坐标存在，还检查
+`fixQuality >= 1`。放宽这里就会出现"没定位但地图上有狗"。
+
+`FakeCollarDataSource` 仍然按 `gpsFixEvery`（默认每 10 帧一次）在原点附近做
+小范围随机游走，方便没有硬件时开发地图/围栏功能。注意假数据源走的是 JSON
+路径，真机走的是 BLE 二进制路径，两者共用同一套 JSON 键名，所以真机的存档
+可以直接喂回假数据路径重放。
 
 坐标转换（WGS84 -> 高德要的 GCJ-02）、围栏进出判断不属于这一层的职责，见
 `../collar_geo`。

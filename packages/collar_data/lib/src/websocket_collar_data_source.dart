@@ -6,7 +6,17 @@ import 'collar_data_source.dart';
 import 'conn_status.dart';
 import 'raw_frame.dart';
 
-/// The real link: connects to the collar's WebSocket over WiFi and streams
+/// ⚠️ **NOT the link to the real collar.** The hardware (Seeed XIAO
+/// nRF54LM20A Sense) has no WiFi at all — it speaks BLE GATT only — so this
+/// class can never reach it. Use `BleCollarDataSource` in `lib/data/` for real
+/// hardware; see `PROTOCOL_CHANGE.md` in the repo root.
+///
+/// This is kept because it is still the fastest way to develop against
+/// `tools/mock_collar.dart` over a normal network, and a capture from the real
+/// collar can be replayed through it (both transports share one JSON key
+/// shape). Treat it as a development tool, not a transport.
+///
+/// Connects to a WebSocket over WiFi and streams
 /// frames. Delivered after [FakeCollarDataSource] on purpose — the fake source
 /// unblocks the UI first; this one plugs in unchanged behind the same interface.
 ///

@@ -10,6 +10,11 @@ import 'raw_frame.dart';
 /// One line per frame:
 ///   {"rx_ts":1757308800456,"raw":{ ...frame exactly as received... }}
 ///
+/// On the real BLE link each line also carries `pet_frame_hex`: the untouched
+/// PET v1 logical frame. That is the actual evidence — replayable through
+/// `decodeFrame`, or through the firmware repo's own `pet_codec.py decode` —
+/// while `raw` is only this app's interpretation of it.
+///
 /// Files rotate by local date: `collar-YYYY-MM-DD.jsonl` under [dirPath].
 ///
 /// Pure Dart on purpose: it takes a plain directory path, so it has NO Flutter
@@ -34,7 +39,18 @@ class RawArchive {
       _openDay = day;
     }
     // Write the whole line then flush, so a hard crash can't leave a half line.
-    _sink!.writeln(jsonEncode({'rx_ts': f.rxTs, 'raw': f.raw}));
+    // On the BLE path the bytes are the evidence and the map is only our
+    // interpretation, so both go to disk. Hex keeps the file one-line-per-frame
+    // JSONL and human-greppable; base64 would be shorter but unreadable when
+    // you are staring at a capture trying to find a malformed frame.
+    _sink!.writeln(jsonEncode(<String, Object?>{
+      'rx_ts': f.rxTs,
+      'raw': f.raw,
+      if (f.bytes != null)
+        'pet_frame_hex': f.bytes!
+            .map((int b) => b.toRadixString(16).padLeft(2, '0'))
+            .join(),
+    }));
     await _sink!.flush();
   }
 

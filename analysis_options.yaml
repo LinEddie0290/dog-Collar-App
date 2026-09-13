@@ -18,6 +18,11 @@ analyzer:
     - windows/**
     - macos/**
     - linux/**
+    # commit 6dfb574 当時の UI のコピー。lib/ に取り込まれて以降は使われて
+    # いないが git には残っている。ビルド対象ではない(エントリは lib/main.dart)
+    # ものの analyzer は見てしまい、削除済みの SensorSample.hr を参照して
+    # エラーになる。消すかどうかは要判断なので、いまは解析対象から外すだけ。
+    - app_lib_dropin/**
 
 linter:
   # The lint rules applied to this project can be customized in the
@@ -36,3 +41,4 @@ linter:
 
 # Additional information about this file can be found at
 # https://dart.dev/guides/language/analysis-options
+

@@ -9,9 +9,10 @@ import 'raw_frame.dart';
 /// and run the whole app **today**, with no hardware and no real WebSocket.
 ///
 /// It mimics the real device closely:
-///   * ~10 Hz sensor frames, hr wandering 70–120, resp, noisy IMU (az≈+1g),
+///   * ~10 Hz sensor frames, body temperature wandering around 38.5 °C, resp,
+///     noisy IMU (az≈+1g),
 ///     strictly increasing seq, slowly draining battery.
-///   * Occasionally emits a frame with **no hr field**, so downstream code is
+///   * Occasionally emits a frame with **no temperature field**, so downstream code is
 ///     forced to handle the nullable case (see [SensorSample]).
 ///   * Simulates dropouts: every [outageEvery] it goes `reconnecting` for
 ///     [outageDuration] and emits no frames, then `connected` again — exactly
@@ -88,10 +89,14 @@ class FakeCollarDataSource implements CollarDataSource {
     if (!_online) return; // silent during a simulated outage
     final now = DateTime.now().millisecondsSinceEpoch;
 
-    // ~1 in 8 frames has no HR reading -> exercises the nullable path.
-    final hasHr = _seq % 8 != 0;
+    // ~1 in 8 frames has no temperature reading -> exercises the nullable
+    // path. On the real collar this happens for a different reason than the
+    // original HR case: temperature arrives at 2 Hz while the IMU runs at
+    // 104 Hz, so most merged snapshots carry no fresh temperature at all.
+    final hasTemp = _seq % 8 != 0;
     final phase = _seq / 20.0;
-    final hr = (95 + 20 * sin(phase) + _noise(3)).clamp(70, 120).round();
+    final bodyTemp = 38.5 + 0.4 * sin(phase) + _noise(0.08);
+    final ambient = 25.0 + _noise(0.5);
     final resp = (20 + 6 * sin(phase / 3) + _noise(1)).clamp(8, 40).round();
 
     final raw = <String, dynamic>{
@@ -99,7 +104,12 @@ class FakeCollarDataSource implements CollarDataSource {
       'type': 'sensor',
       'ts': now + _rng.nextInt(80) - 40, // device clock drifts a little
       'seq': _seq,
-      if (hasHr) 'hr': hr,
+      if (hasTemp) 'body_temp_c': _round(bodyTemp),
+      if (hasTemp) 'ambient_temp_c': _round(ambient),
+      // The real hardware has no respiration sensor, so this field is always
+      // absent on the BLE link. The fake keeps producing it on purpose: it is
+      // how we check the UI still renders when a field it used to rely on
+      // turns into a permanent null.
       'resp': resp,
       'imu': {
         'ax': _round(_noise(0.05)),
@@ -115,10 +125,10 @@ class FakeCollarDataSource implements CollarDataSource {
     _battery = max(0, _battery - 0.01);
   }
 
-  /// Returns `{'lat': ..., 'lng': ..., 'gps_accuracy_m': ...}` on ticks where
-  /// a fix "arrives" (see [gpsFixEvery]), or an empty map otherwise — mirrors
-  /// how the real collar is expected to only occasionally include GPS fields
-  /// in a frame, same nullable-by-omission convention as `hr`.
+  /// Returns the GPS fields on ticks where a fix "arrives" (see [gpsFixEvery]),
+  /// or an empty map otherwise. The real collar sends GPS in its own frames
+  /// rather than as extra fields, and reports fix quality / satellites / HDOP
+  /// instead of an accuracy in metres — it has no accuracy figure to give.
   Map<String, dynamic> _maybeGpsFields() {
     if (_seq % gpsFixEvery != 0) return const <String, dynamic>{};
 
@@ -137,7 +147,9 @@ class FakeCollarDataSource implements CollarDataSource {
     return <String, dynamic>{
       'lat': _round6(_gpsLat),
       'lng': _round6(_gpsLng),
-      'gps_accuracy_m': 5 + _rng.nextInt(10),
+      'fix_quality': 1,
+      'satellites': 8 + _rng.nextInt(4),
+      'hdop': _round(0.8 + _rng.nextDouble() * 0.8),
     };
   }
 

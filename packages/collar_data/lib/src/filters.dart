@@ -39,12 +39,19 @@ class MedianFilter {
 }
 
 /// Per-signal filter chain applied to each incoming sample.
-///   * hr / resp : median (despike) -> EMA (smooth). Slow physiological signals.
+///   * body / ambient temperature : median (despike) -> EMA (smooth). The
+///     MLX90615 needed 14 read retries during the 2026-09-11 bench test, and a
+///     retried infrared read can come back as an outlier, so the median stage
+///     is doing real work here rather than being decorative.
+///   * resp      : same chain, kept wired up for when respiration is derived
+///                 from the IMU. Always null on the real hardware today.
 ///   * IMU axes  : EMA low-pass to shed high-frequency jitter.
-///   * battery   : untouched (already slow).
+///   * gyro / position / battery : untouched.
 class SampleFilter {
-  final MedianFilter _hrMedian;
-  final Ema _hrEma;
+  final MedianFilter _tempMedian;
+  final Ema _tempEma;
+  final MedianFilter _ambientMedian;
+  final Ema _ambientEma;
   final MedianFilter _respMedian;
   final Ema _respEma;
   final Ema _axEma;
@@ -52,13 +59,15 @@ class SampleFilter {
   final Ema _azEma;
 
   SampleFilter({
-    int hrMedianWindow = 5,
-    double hrAlpha = 0.2,
+    int tempMedianWindow = 5,
+    double tempAlpha = 0.2,
     int respMedianWindow = 5,
     double respAlpha = 0.2,
     double imuAlpha = 0.3,
-  })  : _hrMedian = MedianFilter(hrMedianWindow),
-        _hrEma = Ema(hrAlpha),
+  })  : _tempMedian = MedianFilter(tempMedianWindow),
+        _tempEma = Ema(tempAlpha),
+        _ambientMedian = MedianFilter(tempMedianWindow),
+        _ambientEma = Ema(tempAlpha),
         _respMedian = MedianFilter(respMedianWindow),
         _respEma = Ema(respAlpha),
         _axEma = Ema(imuAlpha),
@@ -67,7 +76,8 @@ class SampleFilter {
 
   SensorSample apply(SensorSample s) {
     return s.copyWith(
-      hr: _hrEma.add(_hrMedian.add(s.hr)),
+      bodyTempC: _tempEma.add(_tempMedian.add(s.bodyTempC)),
+      ambientTempC: _ambientEma.add(_ambientMedian.add(s.ambientTempC)),
       resp: _respEma.add(_respMedian.add(s.resp)),
       ax: _axEma.add(s.ax),
       ay: _ayEma.add(s.ay),

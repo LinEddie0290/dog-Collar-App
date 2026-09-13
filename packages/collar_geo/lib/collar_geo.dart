@@ -9,5 +9,6 @@ library;
 
 export 'src/circle_polygon.dart';
 export 'src/gcj02.dart';
+export 'src/nmea.dart';
 export 'src/geofence.dart';
 export 'src/lat_lng.dart';

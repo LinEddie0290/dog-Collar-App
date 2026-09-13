@@ -6,6 +6,9 @@
 library;
 
 export 'src/conn_status.dart';
+export 'src/pet_protocol.dart';
+export 'src/pet_sample.dart';
+export 'src/pet_assembler.dart';
 export 'src/raw_frame.dart';
 export 'src/sensor_sample.dart';
 export 'src/collar_data_source.dart';

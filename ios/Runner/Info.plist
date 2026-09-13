@@ -2,6 +2,13 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<!-- 測定レポート(PDF/CSV)を「ファイル」アプリから取り出せるようにする。
+	     iOS はアプリのサンドボックス外に書けないので、この2つを立てて
+	     Documents フォルダを公開するのが、共有シート以外の唯一の道。 -->
+	<key>UIFileSharingEnabled</key>
+	<true/>
+	<key>LSSupportsOpeningDocumentsInPlace</key>
+	<true/>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
 	<key>CFBundleDevelopmentRegion</key>
@@ -26,6 +33,13 @@
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<!-- 首輪との通信は Bluetooth。iOS 13 以降はこの文言が無いと
+	     CBCentralManager を作った時点でクラッシュする。 -->
+	<key>NSBluetoothAlwaysUsageDescription</key>
+	<string>首輪とつないで、ワンちゃんの体温と位置を受け取るために Bluetooth を使用します。</string>
+	<!-- iOS 12 以前向け。新しい端末では上の項目が使われる。 -->
+	<key>NSBluetoothPeripheralUsageDescription</key>
+	<string>首輪とつないで、ワンちゃんの体温と位置を受け取るために Bluetooth を使用します。</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>地図にワンちゃんと自分の位置を表示するために、位置情報を使用します。</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>

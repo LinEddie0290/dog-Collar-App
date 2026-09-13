@@ -1,0 +1,14 @@
+name: collar_vitals
+description: >
+  Pure-Dart vital-sign extraction for the smart pet-collar app: heart rate and
+  respiration rate from a single accelerometer stream. No FFT, no external
+  packages, no Flutter — runnable and testable with a bare `dart` SDK, same
+  philosophy as ../collar_data and ../collar_geo.
+version: 0.1.0
+
+environment:
+  sdk: ">=3.0.0 <4.0.0"
+
+# No dependencies on purpose. Everything here is biquad filtering and dot
+# products, which is exactly why it can run on a phone inside a 60-second
+# measurement without a DSP library.

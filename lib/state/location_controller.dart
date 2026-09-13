@@ -46,8 +46,18 @@ class LocationController extends ChangeNotifier {
   /// 直近の位置(WGS84)。まだ一度も GPS フィックスを受信していなければ null。
   GeoPoint? latestPosition;
 
-  /// 直近フィックスの精度(メートル)。分からなければ null。
+  /// 直近フィックスの精度の「目安」(メートル)。分からなければ null。
+  ///
+  /// ⚠️ これは実測値ではない。首輪は精度を一切送ってこないので、NMEA の
+  /// GGA から取れる HDOP(無次元の倍率)に受信機ごとの定数 5m を掛けた
+  /// 概算にすぎない。UI では必ず「目安」と分かる形で見せる。
   int? latestAccuracyM;
+
+  /// 直近の測位品質(GGA の fix quality)。0 は未測位。
+  int? latestFixQuality;
+
+  /// 直近の測位に使われた衛星数。0 なら空が見えていない。
+  int? latestSatellites;
 
   DateTime? _lastFixAt;
 
@@ -74,11 +84,26 @@ class LocationController extends ChangeNotifier {
 
   void _onCollarChanged() {
     final SensorSample? sample = collar.latest;
-    if (sample == null || !sample.hasLocation) return;
+    if (sample == null) return;
+
+    // 測位品質は位置が無くても記録しておく。「衛星0個」と「モジュール無応答」
+    // を UI で区別できるのは、この2つの値だけ。
+    latestFixQuality = sample.fixQuality ?? latestFixQuality;
+    latestSatellites = sample.satellites ?? latestSatellites;
+
+    // hasLocation は座標の有無だけでなく測位品質も見る。正しい書式の NMEA が
+    // 品質0で延々と届くのが屋内での通常状態なので、ここを緩めると「測位して
+    // いないのに地図に犬が出る」ことになる。
+    if (!sample.hasLocation) {
+      notifyListeners();
+      return;
+    }
 
     final GeoPoint point = GeoPoint(sample.lat!, sample.lng!);
     latestPosition = point;
-    latestAccuracyM = sample.gpsAccuracyM?.round();
+    latestAccuracyM = sample.estimatedAccuracyM?.round();
+    latestFixQuality = sample.fixQuality;
+    latestSatellites = sample.satellites;
     _lastFixAt = DateTime.now();
     isOffline = false;
 
