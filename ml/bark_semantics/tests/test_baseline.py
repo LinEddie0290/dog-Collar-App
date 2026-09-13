@@ -38,6 +38,17 @@ def _seed(store, dog, device, n, days=5, **bk):
         store.add(dog, device, f"2026-09-{(i % days) + 1:02d}", B.burst_scalars(bf))
 
 
+def test_store_creates_missing_parent_dir():
+    # regression: a fresh checkout has no data/ dir; the store must create it
+    import tempfile
+    d = tempfile.mkdtemp()
+    path = os.path.join(d, "nested", "sub", "baselines.sqlite")
+    store = B.SQLiteBaselineStore(path)           # must not raise
+    store.add("rex", "phone", "2026-09-13", B.burst_scalars(_burst()))
+    assert store.n_samples("rex", "phone") == 1
+    assert os.path.exists(path)
+
+
 def test_percentile_rank_correct():
     store, _ = _store()
     # seed rms_peak distribution 0.0..0.9 (10 samples)

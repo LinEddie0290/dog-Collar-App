@@ -19,6 +19,7 @@ expected to be weaker than arousal, so its confidence is capped separately.
 """
 from __future__ import annotations
 
+import os
 import sqlite3
 from typing import Protocol
 
@@ -60,6 +61,9 @@ class BaselineStore(Protocol):
 
 class SQLiteBaselineStore:
     def __init__(self, path: str):
+        parent = os.path.dirname(path)
+        if parent:
+            os.makedirs(parent, exist_ok=True)
         self.conn = sqlite3.connect(path)
         cols = ", ".join(f"{f} REAL" for f in FEATURES)
         self.conn.execute(
