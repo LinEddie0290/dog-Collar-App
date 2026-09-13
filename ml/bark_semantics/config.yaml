@@ -1,0 +1,186 @@
+# Single source of truth for every tunable. NOTHING is hardcoded elsewhere.
+#
+# The detection/arousal/rules numbers below are INITIAL defaults (pre-tuning).
+# Step 4 sweeps them against the dev set and replaces them with measured picks;
+# until then do not treat them as validated.
+
+model:
+  # Fixed by YAMNet — do not change: 0.96 s analysis window, 0.48 s hop.
+  hop_s: 0.48
+  window_s: 0.96
+  tfhub_url: "https://tfhub.dev/google/yamnet/1"
+  # Retain the full 521-class per-frame scores so the semantic layer (L2 env
+  # events) can reuse them — NO second inference pass. Additive; does not affect
+  # detection. Turning this off returns identical events (verified by test).
+  retain_scores: true
+
+classes:
+  # Indices verified in docs/class_map.md against the real 521-class CSV.
+  # YAMNet is multi-label sigmoid — these scores are independent, not a softmax.
+
+  # Gate tier: "is this a dog at all". Parents/umbrella.
+  gate:
+    dog: 69                 # /m/0bt9lr  Dog
+    canidae: 117            # /m/01z5f   Canidae, dogs, wolves (gate ONLY)
+    domestic_animals: 68    # /m/068hy   Domestic animals, pets (broad)
+    animal: 67              # /m/0jbk    Animal (broadest)
+  # How gate_score is combined from the above (see aggregate.gate_score):
+  #   dog_only | max_dog_canidae | max_all
+  # Step-4 MEASURED (amendment 4, ESC-50): canidae is INERT — dog_only and
+  # max_dog_canidae are identical at every threshold (Canidae never exceeds Dog
+  # on any decisive clip). max_all (adding Animal/Domestic) is HARMFUL
+  # (precision collapses to ~0.09 as cats/cows/pigs trip the broad parents).
+  # => use dog_only. canidae/parents kept in the map above for documentation
+  # only; they are not used by this combiner.
+  gate_combine: "dog_only"
+
+  # Type tier: mutually-competing event type. Bow-wow(73) folded into bark(70).
+  type:
+    bark:     [70, 73]
+    yip:      [71]
+    howl:     [72]
+    growling: [74]
+    whimper:  [75]
+
+  # HUMAN Pant (index 40): logged to a diagnostic side-field ONLY.
+  # Never surfaced, never influences detection (amendment 2).
+  pant_diagnostic_index: 40
+
+detection:
+  # Defaults below are TUNED on ESC-50 (Step 4 sweep, see docs/RESULTS.md).
+  # Clean close-mic audio only — expect to LOWER the threshold on real phone/
+  # far-field audio (weaker scores). Recall-leaning pick on purpose.
+  dog_score_threshold: 0.50       # frame is "dog" when gate_score > this
+                                  # (ESC-50: P=0.84 R=0.93 F1=0.88 at 0.5)
+  smoothing_window_frames: 3      # odd; median-smooths gate_score
+  smoothing_method: "median"      # median | moving_average
+  min_event_duration_s: 0.96      # discard events shorter than this
+  merge_gap_s: 0.48               # non-dog gaps <= this join two events
+  type_vote: "mean_score"         # mean_score | majority
+
+arousal:
+  # HEURISTIC, not a model: 95th-pct frame RMS within the event, in dB (log),
+  # linearly normalized between the anchors below and clamped to [0,1].
+  rms_db_low: -45.0               # -> arousal_proxy 0.0
+  rms_db_high: -15.0              # -> arousal_proxy 1.0
+
+rules:
+  # Pure rules on the event stream (rules.py). All thresholds live here.
+  sustained_howl:
+    min_total_s: 10.0             # howl seconds ...
+    window_s: 60.0               # ... within this sliding window
+  sustained_whine:
+    min_fraction: 0.30           # whimper occupies > this fraction ...
+    window_s: 300.0              # ... of this 5-min window
+  dense_barking:
+    min_events_per_min: 8        # bark events per minute above this
+  night_vocalization:
+    start_hour: 22               # inclusive, local clock
+    end_hour: 6                  # exclusive; window wraps midnight
+
+# ===========================================================================
+# Semantic layers L1/L2/L3 (added). L0 sections above are untouched.
+# All values are config-driven; weights are PLACEHOLDERS pending tuning
+# (no labeled bark->intent data exists yet).
+# ===========================================================================
+semantics:
+  l1:
+    burst_gap_s: 2.0              # barks closer than this belong to one burst
+    f0:
+      pitch_floor: 100.0         # Hz. Praat needs ~3 periods -> ~30 ms min length
+      pitch_ceiling: 1500.0      # barks ~200-900 Hz, whines higher
+      min_voiced_frac: 0.30      # below this -> f0_mean=None (don't report noise)
+      min_segment_s: 0.032       # shorter than ~3 periods at floor -> f0=None
+    rms:
+      frame_s: 0.02              # short-frame RMS for rms_peak / attack_time
+    spectral:
+      n_fft: 1024
+    tonality:                    # continuous harmonicity ~[0,1] (heuristic)
+      flatness_weight: 0.7       # mostly (1 - spectral_flatness)
+      hnr_weight: 0.3            # nudged by HNR when available
+      hnr_norm_db: 25.0          # HNR dB -> [0,1] via hnr/hnr_norm_db, clamped
+
+  baseline:
+    store: "sqlite"              # durable, atomic appends, per-(dog,device) query
+    db_path: "data/baselines.sqlite"
+    min_baseline_samples: 30
+    min_baseline_days: 3
+    learning_confidence_penalty: 0.4   # x confidence during learning period
+    valence_confidence_cap: 0.5        # valence is weak; cap its contributed conf
+    arousal_weights:            # PLACEHOLDERS
+      inv_ibi: 0.35
+      burst_duration: 0.20
+      rms_peak: 0.25
+      f0_std: 0.20
+    valence_weights:            # PLACEHOLDERS
+      hnr: 0.4
+      tonality: 0.4
+      neg_bark_duration: 0.2
+
+  context:
+    env_window_s: [-3.0, 1.0]   # window around burst onset for env events
+    env_score_threshold: 0.30
+    # AudioSet display_name -> category. 'Dog' is DELIBERATELY ABSENT: YAMNet
+    # cannot separate the subject dog from another dog, so it is not a usable
+    # other-dog context signal (enforced in context.py).
+    env_class_map:
+      doorbell:  ["Doorbell", "Ding-dong"]
+      knock:     ["Knock"]
+      door:      ["Door", "Sliding door"]
+      speech:    ["Speech", "Male speech, man speaking", "Female speech, woman speaking", "Children shouting"]
+      footsteps: ["Footsteps"]
+      vehicle:   ["Vehicle", "Car"]
+      phone:     ["Telephone bell ringing"]
+    day_phases:                 # local hour ranges (wrap allowed)
+      night:     [22, 6]
+      morning:   [6, 12]
+      afternoon: [12, 18]
+      evening:   [18, 22]
+
+  intent_rules:
+    - intent: alert_guard
+      required_slots: [env_events]
+      conditions:
+        arousal: {min: 0.65}
+        ibi_percentile: {max: 0.25}
+        env_events_any: [doorbell, knock, door, footsteps]
+      base_confidence: 0.75
+    - intent: play_excitement
+      required_slots: [env_events]
+      optional_slots: [motion_state]
+      conditions:
+        arousal: {min: 0.6}
+        valence: {min: 0.55}
+        env_events_any: [speech]
+      base_confidence: 0.6
+      missing_optional_penalty: 0.7
+    - intent: distress_isolation
+      required_slots: [is_alone]        # unavailable in v1 -> never fires (correct)
+      conditions:
+        arousal: {min: 0.6}
+        valence: {max: 0.4}
+        burst_repetition_min: 3
+        env_events_none: [doorbell, knock, door, speech]
+      base_confidence: 0.7
+    - intent: demand_attention
+      required_slots: [env_events]
+      conditions:
+        arousal: {min: 0.35, max: 0.7}
+        ibi_percentile: {min: 0.5}
+        env_events_any: [speech]
+      base_confidence: 0.5
+    - intent: discomfort_pain
+      required_slots: []
+      conditions:
+        f0_percentile: {max: 0.3}
+        hnr_percentile: {max: 0.3}
+        tonality: {max: 0.4}
+      base_confidence: 0.35
+      max_confidence: 0.5
+
+  degradation:
+    # Safety: when env_events is unavailable, the only rule that could still fire
+    # is discomfort_pain (medical) -> suppress it so degraded mode says UNKNOWN
+    # rather than the riskiest sentence. See infer.py.
+    suppress_when_missing:
+      discomfort_pain: [env_events]
