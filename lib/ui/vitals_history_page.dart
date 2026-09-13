@@ -181,6 +181,7 @@ String _stamp(DateTime d) =>
 /// に置いてあるので、ここは文言を選ぶだけ。
 String? _caveatText(AppStrings s, MeasurementRecord r) => switch (r.caveatCode) {
       'unusable' => s.caveatUnusable,
+      'rate_disagrees' => s.caveatRateDisagrees,
       'fair' => s.caveatFair,
       'gaps' => s.caveatManyGaps,
       _ => null,
@@ -274,6 +275,8 @@ class _RecordTileState extends State<_RecordTile> {
                   _M(s.bodyTempLabel,
                       '${r.bodyTempC!.toStringAsFixed(1)} ${s.celsiusUnit}'),
                 _M(s.beatCountLabel, '${r.beatCount}'),
+                if (r.beatRateBpm != null)
+                  _M(s.beatRateLabel, '${r.beatRateBpm!.round()} bpm'),
                 _M(s.beatCvLabel,
                     '${r.beatIntervalCvPercent?.toStringAsFixed(1) ?? "--"} %'),
                 _M('SDNN', '${r.sdnnMs?.toStringAsFixed(0) ?? "--"} ms'),

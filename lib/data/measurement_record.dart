@@ -142,9 +142,33 @@ class MeasurementRecord {
   /// export goes to a Japanese vet.
   String? get caveatCode {
     if (quality == 'unusable') return 'unusable';
+    if (rateDisagrees) return 'rate_disagrees';
     if (quality == 'fair') return 'fair';
     if (gapCount > beatCount * 0.1) return 'gaps';
     return null;
+  }
+
+  /// 拍を1つずつ数えて出した心拍。保存済みの拍間隔から求めるので、
+  /// 記録を作り直さなくても後から突き合わせられる。
+  double? get beatRateBpm {
+    if (beatIntervalsMs.length < 3) return null;
+    final List<double> sorted = List<double>.of(beatIntervalsMs)..sort();
+    final double median = sorted[sorted.length ~/ 2];
+    return median > 0 ? 60000 / median : null;
+  }
+
+  /// [heartRateBpm] と [beatRateBpm] が 25% 以上ずれている。
+  ///
+  /// 波の周期(自己相関)と拍の数え上げは独立した2つの数え方で、一致して
+  /// いれば強い裏付けになる。食い違うときは、心弾動の1拍の中にある2つ目の
+  /// 山を拍として拾っている疑いがある。どちらが正しいかは信号を見ないと
+  /// 決められないので、黙って選ばずに注記として出す。
+  bool get rateDisagrees {
+    final double? a = heartRateBpm;
+    final double? b = beatRateBpm;
+    if (a == null || b == null || a <= 0) return false;
+    final double ratio = b / a;
+    return ratio < 0.75 || ratio > 1.33;
   }
 
   Map<String, dynamic> toJson() => <String, dynamic>{

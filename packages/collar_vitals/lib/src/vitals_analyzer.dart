@@ -69,6 +69,8 @@ class VitalsResult {
     this.beatEnvelope = const <double>[],
     this.respirationWave = const <double>[],
     this.unusableReason,
+    this.beatRateBpm,
+    this.rateDisagrees = false,
   });
 
   final double sampleRateHz;
@@ -85,6 +87,24 @@ class VitalsResult {
 
   /// Peak autocorrelation, 0..1.
   final double heartRateConfidence;
+
+  /// 拍を1つずつ数えて出した心拍。[heartRateBpm] は自己相関（信号全体の
+  /// 周期性）から、こちらは検出した拍の間隔の中央値から求めている。
+  ///
+  /// 2つを並べて持つのは、食い違ったときに気づけるようにするため。
+  /// 心弾動は1拍の中に I 波・J 波と拡張期の波があり、センサーの当て方に
+  /// よっては信号が「半分の周期でも周期的」に見える。そうなると自己相関は
+  /// 2倍の心拍を返すが、拍を数えるほうは正しいままのことがある。
+  /// 2026-09-13 の実機で、拍のしるしが 72 /分なのに数字が 137 bpm と
+  /// 出たのがこれ。どちらが正しいかは信号を見ないと決められないので、
+  /// 黙ってどちらかを選ぶのではなく [rateDisagrees] で告げる。
+  final double? beatRateBpm;
+
+  /// [heartRateBpm] と [beatRateBpm] が 25% 以上ずれている。
+  ///
+  /// このとき品質は [VitalsQuality.good] にはしない。2つの独立した数え方が
+  /// 一致しないものを「信頼できる」と表示してはいけない。
+  final bool rateDisagrees;
 
   /// Individual beat times, for plotting and for variability.
   final List<double> beatTimesSeconds;
@@ -251,7 +271,7 @@ class VitalsAnalyzer {
     final double confidence =
         beatLag > 0 ? ac.valueAtLag(beatLag).clamp(0.0, 1.0) : 0.0;
 
-    final VitalsQuality quality = confidence >= minConfidenceGood
+    VitalsQuality quality = confidence >= minConfidenceGood
         ? VitalsQuality.good
         : confidence >= minConfidenceFair
             ? VitalsQuality.fair
@@ -262,17 +282,25 @@ class VitalsAnalyzer {
     List<double> intervals = const <double>[];
     double? sdnn, rmssd;
     if (bpm != null && quality != VitalsQuality.unusable) {
-      double sumSq = 0;
-      for (final double v in env) {
-        sumSq += v * v;
+      // しきい値は二乗平均ではなく、正の値の中央値を使う。二乗平均は
+      // 突発的な大きな山（体の動き、フィルタの立ち上がり）に引っ張られて
+      // 跳ね上がり、そうなると本物の拍まで閾値を下回って数え落とす。
+      // 実機で拍のしるしが1拍おきになっていたのがこれ。
+      final List<double> positive =
+          env.where((double v) => v > 0).toList(growable: false);
+      double level;
+      if (positive.isEmpty) {
+        level = 0;
+      } else {
+        final List<double> sorted = List<double>.of(positive)..sort();
+        level = sorted[sorted.length ~/ 2];
       }
-      final double rms = math.sqrt(sumSq / env.length);
       // Beats can never be closer than 60% of the detected interval; that
       // guard is what stops one beat's secondary wave being counted twice.
       final List<int> peaks = findPeaks(
         env,
         minDistance: (beatLag * 0.6).round(),
-        minProminence: rms * 0.5,
+        minProminence: level,
       );
       beatTimes = peaks
           .map((int i) => i / sampleRateHz)
@@ -318,10 +346,29 @@ class VitalsAnalyzer {
       rr = 60 * sampleRateHz / respAc.refinedLag(respLag);
     }
 
+    // 拍の間隔の中央値から出した心拍。自己相関の答えと突き合わせる。
+    double? beatRate;
+    if (intervals.length >= 3) {
+      final List<double> sorted = List<double>.of(intervals)..sort();
+      final double median = sorted[sorted.length ~/ 2];
+      if (median > 0) beatRate = 60000 / median;
+    }
+    bool disagrees = false;
+    if (bpm != null && beatRate != null && bpm > 0) {
+      final double ratio = beatRate / bpm;
+      disagrees = ratio < 0.75 || ratio > 1.33;
+    }
+    if (disagrees && quality == VitalsQuality.good) {
+      // 2つの独立した数え方が一致しないものを「信頼できる」とは言わない。
+      quality = VitalsQuality.fair;
+    }
+
     return VitalsResult(
       sampleRateHz: sampleRateHz,
       durationSeconds: duration,
       quality: quality,
+      beatRateBpm: beatRate,
+      rateDisagrees: disagrees,
       heartRateBpm: quality == VitalsQuality.unusable ? null : bpm,
       unusableReason:
           quality == VitalsQuality.unusable ? 'no_periodicity' : null,

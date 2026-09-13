@@ -131,6 +131,11 @@ class AppStrings {
     required this.deleteRecord,
     required this.durationLabel,
     required this.postureLabel,
+    required this.beatRateLabel,
+    required this.rateDisagreeWarning,
+    required this.caveatRateDisagrees,
+    required this.exportRawSignal,
+    required this.rawSignalNote,
     required this.reportTitle,
     required this.exportThisRecord,
     required this.exportPdf,
@@ -303,6 +308,11 @@ class AppStrings {
   final String deleteRecord;
   final String durationLabel;
   final String postureLabel;
+  final String beatRateLabel;
+  final String rateDisagreeWarning;
+  final String caveatRateDisagrees;
+  final String exportRawSignal;
+  final String rawSignalNote;
   final String reportTitle;
   final String exportThisRecord;
   final String exportPdf;
@@ -537,6 +547,11 @@ class AppStrings {
     deleteRecord: 'この記録を削除',
     durationLabel: '測定時間',
     postureLabel: '姿勢',
+    beatRateLabel: '拍を数えた値',
+    rateDisagreeWarning: '波の周期から出した心拍と、拍を1つずつ数えた心拍が食い違っています。センサーの当て方で1拍の中の2つ目の山を拾っている可能性があります。当て直して測り直してください。',
+    caveatRateDisagrees: '2つの数え方が食い違ったため、この心拍は参考値です。',
+    exportRawSignal: '診断用の生データを書き出す',
+    rawSignalNote: '加速度の生データをそのまま書き出します。数値が合わないときの原因調べに使います。',
     reportTitle: '心拍測定レポート',
     exportThisRecord: 'この測定を書き出す',
     exportPdf: 'PDF で書き出す',
@@ -693,6 +708,11 @@ class AppStrings {
     deleteRecord: 'Delete this record',
     durationLabel: 'Duration',
     postureLabel: 'Posture',
+    beatRateLabel: 'Counted beats',
+    rateDisagreeWarning: 'The rate from the signal period and the rate from counting individual beats disagree. The sensor may be picking up the second wave within each beat. Reposition it and measure again.',
+    caveatRateDisagrees: 'The two methods disagreed, so treat this rate as approximate.',
+    exportRawSignal: 'Export raw signal for diagnosis',
+    rawSignalNote: 'Exports the raw accelerometer samples. Use this to investigate a reading that looks wrong.',
     reportTitle: 'Heart-rate measurement report',
     exportThisRecord: 'Export this measurement',
     exportPdf: 'Export as PDF',
@@ -846,6 +866,11 @@ class AppStrings {
     deleteRecord: '删除这条记录',
     durationLabel: '测量时长',
     postureLabel: '姿势',
+    beatRateLabel: '按心跳计数',
+    rateDisagreeWarning: '由信号周期得出的心率与逐拍计数得出的心率不一致。传感器可能捕捉到了每次心跳中的第二个波峰。请重新放置后再测。',
+    caveatRateDisagrees: '两种计数方式不一致，此心率仅供参考。',
+    exportRawSignal: '导出原始信号用于诊断',
+    rawSignalNote: '原样导出加速度原始数据，用于排查数值异常。',
     reportTitle: '心率测量报告',
     exportThisRecord: '导出这条测量',
     exportPdf: '导出为 PDF',

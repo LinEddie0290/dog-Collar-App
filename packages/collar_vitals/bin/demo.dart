@@ -163,6 +163,31 @@ void runSynthetic() {
   check('minSeconds: 8 を渡せば9秒の窓でも心拍を出す',
       rlive.heartRateBpm != null && (rlive.heartRateBpm! - 78).abs() <= 10,
       '${rlive.quality.name} / ${rlive.heartRateBpm?.toStringAsFixed(1)}');
+
+  print('\n4. 2つの数え方の突き合わせ');
+  // 波の周期(自己相関)と拍の数え上げは独立している。素直な信号では
+  // 一致するはずで、一致しないなら何かがおかしい、という使い方をする。
+  final VitalsResult rb = analyzer.analyze(
+      synthesise(bpm: 78, seconds: 60, sampleRateHz: 104),
+      sampleRateHz: 104);
+  check('拍を数えた心拍も 78 bpm 付近になる',
+      rb.beatRateBpm != null && (rb.beatRateBpm! - 78).abs() <= 8,
+      '${rb.beatRateBpm?.toStringAsFixed(1)}');
+  check('素直な信号では食い違い警告を出さない', !rb.rateDisagrees,
+      '自己相関 ${rb.heartRateBpm?.toStringAsFixed(1)} / '
+      '拍 ${rb.beatRateBpm?.toStringAsFixed(1)}');
+
+  // 食い違ったら good にはしない、という約束の確認。
+  const VitalsResult fake = VitalsResult(
+    sampleRateHz: 104,
+    durationSeconds: 60,
+    quality: VitalsQuality.good,
+    heartRateBpm: 140,
+    beatRateBpm: 70,
+    rateDisagrees: true,
+  );
+  check('食い違いは結果に載る（表示側が警告を出せる）',
+      fake.rateDisagrees && fake.beatRateBpm == 70);
 }
 
 void runRealCapture(String path) {

@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:flutter/services.dart' show rootBundle;
@@ -99,6 +100,10 @@ class RecordExport {
     kv('duration_s', r.durationSeconds.toStringAsFixed(0));
     kv('heart_rate_bpm', r.heartRateBpm?.toStringAsFixed(1));
     kv('heart_rate_confidence', r.heartRateConfidence.toStringAsFixed(2));
+    // 拍を1つずつ数えた心拍。上の heart_rate_bpm は波の周期から出した値で、
+    // 数え方が独立しているので、2つ並べておくと受け取った側で検算できる。
+    kv('beat_rate_bpm', r.beatRateBpm?.toStringAsFixed(1));
+    kv('rate_disagrees', r.rateDisagrees ? 'yes' : 'no');
     kv('respiration_per_min', r.respirationPerMin?.toStringAsFixed(1));
     kv('body_temp_c', r.bodyTempC?.toStringAsFixed(1));
     kv('quality', r.quality);
@@ -396,6 +401,38 @@ class RecordExport {
     return out;
   }
 
+  /// 生の加速度をそのまま CSV にする。原因調べ用。
+  ///
+  /// 心拍の数値が信号と合わないとき、加工後の数値だけでは何も分からない。
+  /// 元の信号が無いと、推測でアルゴリズムを触ることになる。そうならない
+  /// ように、その場の生データを持ち出せるようにしてある。
+  ///
+  /// 60 秒 × 104 Hz で約 6200 行。CSV として普通に開ける大きさ。
+  static Future<String> writeRawCsv({
+    required String stem,
+    required List<int> deviceUs,
+    required List<double> magnitude,
+    double? sampleRateHz,
+  }) async {
+    final Directory docs = await getApplicationDocumentsDirectory();
+    final Directory dir = Directory('${docs.path}/reports');
+    if (!dir.existsSync()) {
+      await dir.create(recursive: true);
+    }
+    final StringBuffer b = StringBuffer();
+    b.writeln('# raw accelerometer magnitude from the collar (diagnostics)');
+    b.writeln('# sample_rate_hz,${sampleRateHz?.toStringAsFixed(2) ?? ""}');
+    b.writeln('# samples,${magnitude.length}');
+    b.writeln('device_us,magnitude_m_s2');
+    final int n = math.min(deviceUs.length, magnitude.length);
+    for (int i = 0; i < n; i++) {
+      b.writeln('${deviceUs[i]},${magnitude[i].toStringAsFixed(6)}');
+    }
+    final File f = File('${dir.path}/$stem-raw.csv');
+    await f.writeAsString(b.toString());
+    return f.path;
+  }
+
   // -------------------------------------------------------------- 小物
 
   static String _qualityLabel(String q, AppStrings s) => switch (q) {
@@ -406,6 +443,7 @@ class RecordExport {
 
   static String _caveat(String code, AppStrings s) => switch (code) {
         'unusable' => s.caveatUnusable,
+        'rate_disagrees' => s.caveatRateDisagrees,
         'fair' => s.caveatFair,
         'gaps' => s.caveatManyGaps,
         _ => '',

@@ -74,6 +74,7 @@ class VitalsSession extends ChangeNotifier {
   final Duration waveUpdateInterval;
 
   /// 画面に出す波形の長さ(秒)。5秒あれば安静時で6拍前後入る。
+  /// フィルタにはこれより長い区間を渡し、両端の過渡応答を捨てる。
   final double waveSeconds;
 
   /// 途中の推定値を出し始める最短の長さ(秒)。保存する測定は
@@ -134,6 +135,11 @@ class VitalsSession extends ChangeNotifier {
       phase == SessionPhase.preparing ||
       phase == SessionPhase.measuring ||
       phase == SessionPhase.analyzing;
+
+  /// 生データ。原因調べのために書き出せるようにしてある。
+  /// 加工後の数値だけでは、数値が信号と合わないときに何も追えない。
+  List<double> get rawMagnitude => List<double>.unmodifiable(_magnitude);
+  List<int> get rawDeviceUs => List<int>.unmodifiable(_deviceUs);
 
   /// Fraction of [targetDuration] collected, 0..1, for a progress ring.
   double get progress => _startedAt == null
@@ -283,40 +289,69 @@ class VitalsSession extends ChangeNotifier {
   ///
   /// 全区間を毎回フィルタし直すと 60 秒 × 104 Hz で 6240 点になり、10 fps
   /// では間に合わない。窓は 5 秒 = 520 点なので、10 fps でも十分軽い。
+  ///
+  /// ただし短い窓をそのまま出してはいけない。filtfilt は窓の両端に大きな
+  /// 過渡応答（立ち上がりの暴れ）を作る。実機の画面で左端に巨大な棘が立ち、
+  /// 振幅の自動調整がそれに引っぱられて、本物の波形が真ん中で平らに
+  /// 潰れていた。拍のしるしもその棘に集まっていた。
+  ///
+  /// 対策は単純で、**表示したいより長い区間をフィルタして、両端を捨てる**。
+  /// 右端(=いま)も捨てるので表示は 0.3 秒だけ過去になるが、人には分からない。
   void _recomputeWave() {
     final double? fs = effectiveSampleRateHz;
     if (fs == null || fs < VitalsAnalyzer.minSampleRateHz) return;
-    final int window = (fs * waveSeconds).round();
-    if (_magnitude.length < window ~/ 4) return; // 出せるほど溜まっていない
 
-    final List<double> slice = _magnitude.length > window
-        ? _magnitude.sublist(_magnitude.length - window)
+    const double guardHeadSeconds = 2.0; // 左端で捨てる長さ
+    const double guardTailSeconds = 0.3; // 右端で捨てる長さ
+    final int want =
+        (fs * (waveSeconds + guardHeadSeconds + guardTailSeconds)).round();
+    // 1秒ぶんも無いうちは何も出さない。中途半端な波形を出すと、
+    // 過渡応答を心拍だと思わせてしまう。
+    if (_magnitude.length < (fs * 1.3).round()) return;
+
+    final List<double> slice = _magnitude.length > want
+        ? _magnitude.sublist(_magnitude.length - want)
         : List<double>.of(_magnitude);
 
-    // 帯域はナイキスト内に収める。解析側と同じ決め方をする。
     final double nyquist = fs / 2;
     final double hi = math.min(40.0, nyquist * 0.9);
     final double lo = math.min(8.0, hi * 0.5);
     final List<double> band =
         bandPass(slice, sampleRateHz: fs, lowHz: lo, highHz: hi);
-
-    // 拍の位置は包絡線の山。間隔の下限は、いま推定できている心拍から決める。
-    // 推定がまだ無いときは 220 bpm 相当(=最短間隔)を使い、拾いすぎを防ぐ。
     final List<double> env = envelope(band, sampleRateHz: fs);
-    double sumSq = 0;
-    for (final double v in env) {
-      sumSq += v * v;
+
+    // 両端を捨てる。溜まりが少ないうちは、少なくとも 1 秒は残す。
+    final int tail = (fs * guardTailSeconds).round();
+    final int minKeep = (fs * 1.0).round();
+    int head = (fs * guardHeadSeconds).round();
+    if (band.length - head - tail < minKeep) {
+      head = math.max(0, band.length - tail - minKeep);
     }
-    final double rms = env.isEmpty ? 0 : math.sqrt(sumSq / env.length);
+    final int end = math.max(head + 2, band.length - tail);
+    if (end <= head + 2) return;
+
+    final List<double> shown = band.sublist(head, end);
+    final List<double> shownEnv = env.sublist(head, end);
+
+    // しきい値は中央値。解析側と同じ理由(二乗平均は突発的な山に弱い)。
+    final List<double> positive =
+        shownEnv.where((double v) => v > 0).toList(growable: false);
+    double level = 0;
+    if (positive.isNotEmpty) {
+      final List<double> sorted = List<double>.of(positive)..sort();
+      level = sorted[sorted.length ~/ 2];
+    }
+    // 拍の最短間隔は、いま推定できている心拍から決める。推定が無いあいだは
+    // 220 bpm 相当(=最短)にして拾いすぎを防ぐ。
     final double? bpm = liveResult?.heartRateBpm;
     final int minDistance =
-        ((60 / (bpm ?? 220.0)) * fs * 0.6).round().clamp(2, band.length);
+        ((60 / (bpm ?? 220.0)) * fs * 0.6).round().clamp(2, shown.length);
 
-    liveWave = band;
-    liveWaveSeconds = band.length / fs;
-    liveBeatIndices = rms <= 0
+    liveWave = shown;
+    liveWaveSeconds = shown.length / fs;
+    liveBeatIndices = level <= 0
         ? const <int>[]
-        : findPeaks(env, minDistance: minDistance, minProminence: rms * 0.5);
+        : findPeaks(shownEnv, minDistance: minDistance, minProminence: level);
     notifyListeners();
   }
 

@@ -12,6 +12,7 @@ import 'devices_page.dart';
 import 'vitals_history_page.dart';
 import 'widgets/beat_chart.dart';
 import 'widgets/export_button.dart';
+import 'widgets/raw_export_button.dart';
 import 'widgets/live_wave_chart.dart';
 
 /// 心拍測定の画面。
@@ -55,6 +56,7 @@ class MeasurePage extends StatelessWidget {
                     result: session.finalResult!,
                     record: session.savedRecord,
                     s: s,
+                    session: session,
                   ),
                 if (session.phase == SessionPhase.idle &&
                     session.errorMessage == null &&
@@ -353,6 +355,15 @@ class _LiveCard extends StatelessWidget {
                   style:
                       const TextStyle(fontSize: 12, color: AppColors.accent)),
             ),
+          // 2つの数え方が食い違ったら、その場で言う。あとで履歴を見て
+          // 「あの数字は何だったのか」と考えることになるのを避ける。
+          if (r != null && r.rateDisagrees)
+            Padding(
+              padding: const EdgeInsets.only(top: 10),
+              child: Text(s.rateDisagreeWarning,
+                  style: const TextStyle(
+                      fontSize: 12, height: 1.5, color: AppColors.accent)),
+            ),
           const Divider(height: 22, color: AppColors.divider),
           Wrap(
             spacing: 18,
@@ -362,6 +373,11 @@ class _LiveCard extends StatelessWidget {
               if (fs != null)
                 _Metric(s.measuredRate, '${fs.toStringAsFixed(0)} Hz'),
               _Metric(s.droppedPackets, '${session.gapCount}'),
+              // 上の大きな数字とは別の数え方。両方見えていれば、食い違いに
+              // すぐ気づける。
+              if (r?.beatRateBpm != null)
+                _Metric(s.beatRateLabel,
+                    '${r!.beatRateBpm!.round()} bpm'),
             ],
           ),
           if (session.gapCount > 20)
@@ -379,10 +395,13 @@ class _LiveCard extends StatelessWidget {
 
 class _ResultCard extends StatelessWidget {
   const _ResultCard(
-      {required this.result, required this.s, this.record});
+      {required this.result, required this.s, this.record, this.session});
   final VitalsResult result;
   final MeasurementRecord? record;
   final AppStrings s;
+
+  /// 生データの書き出しに使う。測定直後だけ渡される(履歴からは渡らない)。
+  final VitalsSession? session;
 
   @override
   Widget build(BuildContext context) {
@@ -463,6 +482,13 @@ class _ResultCard extends StatelessWidget {
           const SizedBox(height: 6),
           BeatIntervalChart(
               intervalsMs: result.beatIntervalsMs, emptyLabel: s.noDataYet),
+          if (result.rateDisagrees)
+            Padding(
+              padding: const EdgeInsets.only(top: 12),
+              child: Text(s.rateDisagreeWarning,
+                  style: const TextStyle(
+                      fontSize: 12, height: 1.5, color: AppColors.accent)),
+            ),
           if (record != null) ...<Widget>[
             const Divider(height: 20, color: AppColors.divider),
             Text(s.exportThisRecord,
@@ -472,6 +498,10 @@ class _ResultCard extends StatelessWidget {
                     color: AppColors.textSecondary)),
             const SizedBox(height: 2),
             RecordExportButton(record: record!),
+            if (session != null) ...<Widget>[
+              const SizedBox(height: 4),
+              RawSignalExportButton(session: session!, record: record!),
+            ],
           ],
           const SizedBox(height: 12),
           Container(
@@ -658,6 +688,7 @@ class _Card extends StatelessWidget {
 String? _caveatText(AppStrings s, MeasurementRecord? r) =>
     switch (r?.caveatCode) {
       'unusable' => s.caveatUnusable,
+      'rate_disagrees' => s.caveatRateDisagrees,
       'fair' => s.caveatFair,
       'gaps' => s.caveatManyGaps,
       _ => null,

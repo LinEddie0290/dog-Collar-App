@@ -368,18 +368,11 @@ class BleCollarDataSource implements CollarDataSource {
 
       // A bigger MTU only means fewer fragments; the format is unchanged, and
       // the negotiated value is what matters, never the requested one.
-      // iOS は requestMtu を許さない(CoreBluetooth が自分で決める)ので、
-      // 例外になったら「23」と決めつけずに実際の値を読む。決めつけていた
-      // せいで iPhone では常に MTU 23 扱いになり、IMU レートが 52 Hz に
-      // 落とされていた。
-      try {
-        _mtu = await device.requestMtu(247);
-      } on Exception {
-        final int now = device.mtuNow;
-        _mtu = now > 0 ? now : 23;
-      }
-
       await _discover(device);
+      // MTU はサービス探索の後に読む。iPhone で 52 Hz に落とされていたのは、
+      // 接続直後の mtuNow がまだ 23 のままだったため(CoreBluetooth が実際の
+      // 値を入れるのは探索のあと)。探索を先に済ませてから読む。
+      _mtu = await _negotiateMtu(device);
       await _subscribe();
       await _handshake();
       if (startStreaming) {
@@ -392,6 +385,28 @@ class BleCollarDataSource implements CollarDataSource {
     } on Exception {
       _emit(ConnStatus.disconnected);
       rethrow;
+    }
+  }
+
+  /// 実際に使える MTU を得る。
+  ///
+  /// Android は明示的に要求できる。iOS/macOS は CoreBluetooth が自分で決める
+  /// ので `requestMtu` は例外になり、そこで 23 と決めつけていたのが
+  /// 「104 Hz にしたのに 52 Hz で動く」不具合の原因だった(2026-09-13、実機)。
+  /// 例外のあとは実際の値を読み、まだ入っていなければ通知を一度待つ。
+  Future<int> _negotiateMtu(BluetoothDevice device) async {
+    try {
+      final int requested = await device.requestMtu(247);
+      if (requested > 23) return requested;
+    } on Exception {
+      // iOS では必ずここに来る。異常ではない。
+    }
+    final int now = device.mtuNow;
+    if (now > 23) return now;
+    try {
+      return await device.mtu.first.timeout(const Duration(seconds: 2));
+    } on Exception {
+      return now > 0 ? now : 23;
     }
   }
 
@@ -507,8 +522,11 @@ class BleCollarDataSource implements CollarDataSource {
     // second, which no phone will sustain. Halving the rate is the honest
     // fallback — measured on 2026-09-12, 52 Hz still recovered the same heart
     // rate (77.0 vs 78.0 bpm), only with a weaker margin.
+    // 1フレーム 56 バイト + 断片ヘッダ 8 バイト = 64 バイトが 1 通知
+    // (MTU - 3) に収まるのは MTU 67 以上。そこを境にする。以前は 100 で
+    // 切っていたが、根拠のない値だった。
     int rate = imuRateHz;
-    if (_mtu < 100 && rate > 52) {
+    if (_mtu < 67 && rate > 52) {
       rate = 52;
     }
     _activeImuRateHz = rate;
