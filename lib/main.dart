@@ -7,6 +7,11 @@ import 'l10n/app_language.dart';
 import 'l10n/app_strings.dart';
 import 'state/collar_controller.dart';
 import 'state/locale_controller.dart';
+import 'data/measurement_store.dart';
+import 'state/location_controller.dart';
+import 'state/collar_link.dart';
+import 'state/vitals_session.dart';
+import 'ui/amap_init.dart';
 import 'ui/root_shell.dart';
 import 'ui/theme.dart';
 
@@ -24,10 +29,19 @@ class CollarApp extends StatefulWidget {
 class _CollarAppState extends State<CollarApp> {
   final CollarController _controller = CollarController();
   final LocaleController _localeController = LocaleController();
+  late final LocationController _locationController;
+  final MeasurementStore _measurementStore = MeasurementStore();
+  final CollarLink _collarLink = CollarLink();
+  late final VitalsSession _vitalsSession;
+  bool _amapInitialized = false;
 
   @override
   void initState() {
     super.initState();
+    _locationController = LocationController(collar: _controller);
+    _vitalsSession =
+        VitalsSession(store: _measurementStore, link: _collarLink);
+    unawaited(_collarLink.loadKnown());
     unawaited(_localeController.loadSaved());
   }
 
@@ -35,11 +49,23 @@ class _CollarAppState extends State<CollarApp> {
   void dispose() {
     _controller.dispose();
     _localeController.dispose();
+    _locationController.dispose();
+    _vitalsSession.dispose();
+    _collarLink.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    // 高徳地図 SDK の初期化は BuildContext が要るので、ここで一度だけ呼ぶ。
+    // API キーが未設定 (isAmapConfigured == false) の間は呼ばない —
+    // amap_init.dart の説明どおり、プレースホルダーキーで SDK を呼ぶと
+    // エラーになる可能性があるため。
+    if (!_amapInitialized && isAmapConfigured) {
+      _amapInitialized = true;
+      initAmap(context);
+    }
+
     return AnimatedBuilder(
       animation: _localeController,
       builder: (BuildContext context, Widget? _) {
@@ -68,6 +94,9 @@ class _CollarAppState extends State<CollarApp> {
           home: RootShell(
             controller: _controller,
             localeController: _localeController,
+            locationController: _locationController,
+            vitalsSession: _vitalsSession,
+            collarLink: _collarLink,
           ),
         );
       },

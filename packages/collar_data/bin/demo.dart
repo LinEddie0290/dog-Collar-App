@@ -1,3 +1,6 @@
+// ignore_for_file: avoid_print
+// このファイルは `dart run bin/demo.dart` で動作確認するための CLI。
+// print が出力そのものなので avoid_print はここでは適用しない。
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -11,9 +14,11 @@ import 'package:collar_data/collar_data.dart';
 /// It runs the full pipeline against the FAKE collar for a few seconds and
 /// checks that:
 ///   1. every raw frame was archived to disk (before filtering),
-///   2. the nullable HR path is actually exercised (some frames have no HR),
+///   2. the nullable temperature path is actually exercised (some frames have no HR),
 ///   3. filtering reduces jitter (variance down),
-///   4. a simulated dropout produces a `reconnecting` -> `connected` cycle.
+///   4. a simulated dropout produces a `reconnecting` -> `connected` cycle,
+///   5. GPS fixes show up on some (not all) frames, and lat/lng survive the
+///      filter stage unchanged (GPS is not filtered, see filters.dart).
 Future<void> main() async {
   final tmp = await Directory.systemTemp.createTemp('collar_demo_');
   print('archive dir: ${tmp.path}\n');
@@ -28,12 +33,13 @@ Future<void> main() async {
   final repo = CollarRepository(source: source, archive: archive);
 
   // Ordered sequences (nulls kept) so we can measure jitter as the stddev of
-  // successive differences — the deterministic HR swing cancels out, leaving
+  // successive differences — the deterministic temperature swing cancels out, leaving
   // only the high-frequency noise the filter is meant to remove.
-  final rawHrSeq = <double?>[];
-  final filtHrSeq = <double?>[];
-  var hrNulls = 0;
+  final rawTempSeq = <double?>[];
+  final filtTempSeq = <double?>[];
+  var tempNulls = 0;
   var samples = 0;
+  var gpsFixes = 0;
 
   final statuses = <ConnStatus>[];
   final statusSub = repo.status.listen((s) {
@@ -43,8 +49,9 @@ Future<void> main() async {
 
   final cleanSub = repo.cleanStream.listen((s) {
     samples++;
-    if (s.hr == null) hrNulls++;
-    filtHrSeq.add(s.hr);
+    if (s.bodyTempC == null) tempNulls++;
+    if (s.hasLocation) gpsFixes++;
+    filtTempSeq.add(s.bodyTempC);
   });
 
   await repo.start();
@@ -53,7 +60,7 @@ Future<void> main() async {
   await statusSub.cancel();
   await cleanSub.cancel();
 
-  // ---- read the archive back and pull raw HR for a jitter comparison ----
+  // ---- read the archive back and pull raw temperature for a jitter comparison ----
   var archivedLines = 0;
   for (final file in tmp.listSync().whereType<File>()) {
     for (final line in file.readAsLinesSync()) {
@@ -61,36 +68,42 @@ Future<void> main() async {
       archivedLines++;
       final obj = jsonDecode(line) as Map<String, dynamic>;
       final raw = obj['raw'] as Map<String, dynamic>;
-      rawHrSeq.add(raw['hr'] is num ? (raw['hr'] as num).toDouble() : null);
+      rawTempSeq.add(raw['body_temp_c'] is num
+          ? (raw['body_temp_c'] as num).toDouble()
+          : null);
     }
   }
 
-  final rawJitter = _jitter(rawHrSeq);
-  final filtJitter = _jitter(filtHrSeq);
+  final rawJitter = _jitter(rawTempSeq);
+  final filtJitter = _jitter(filtTempSeq);
 
   print('\n--- results ---');
   print('samples emitted      : $samples');
   print('archived raw lines   : $archivedLines');
-  print('frames with null hr  : $hrNulls');
+  print('frames with null temp  : $tempNulls');
+  print('frames with gps fix  : $gpsFixes');
   print('status transitions   : $statuses');
-  print('raw hr jitter        : ${rawJitter.toStringAsFixed(3)}');
-  print('filtered hr jitter   : ${filtJitter.toStringAsFixed(3)}');
+  print('raw temp jitter        : ${rawJitter.toStringAsFixed(3)}');
+  print('filtered temp jitter   : ${filtJitter.toStringAsFixed(3)}');
 
   // ---- assertions ----
   _check(archivedLines == samples,
       'every sample must be archived (raw persisted before filtering)');
-  _check(hrNulls > 0, 'nullable HR path must be exercised');
-  _check(filtJitter < rawJitter, 'filter must reduce HR jitter');
+  _check(tempNulls > 0, 'nullable temperature path must be exercised');
+  _check(filtJitter < rawJitter, 'filter must reduce temperature jitter');
   _check(statuses.contains(ConnStatus.reconnecting),
       'a simulated dropout must surface as reconnecting');
   _check(statuses.contains(ConnStatus.connected), 'must reach connected');
+  _check(gpsFixes > 0, 'GPS fixes must show up on at least some frames');
+  _check(gpsFixes < samples,
+      'GPS fixes must NOT show up on every frame (lower rate than IMU/HR)');
 
   await tmp.delete(recursive: true);
   print('\nALL CHECKS PASSED ✅');
 }
 
 /// Jitter = stddev of successive differences over consecutive non-null pairs.
-/// A slow trend (like the sine HR swing) contributes ~0 here, so this isolates
+/// A slow trend (like the sine temperature swing) contributes ~0 here, so this isolates
 /// the high-frequency noise a low-pass filter should shrink.
 double _jitter(List<double?> xs) {
   final diffs = <double>[];

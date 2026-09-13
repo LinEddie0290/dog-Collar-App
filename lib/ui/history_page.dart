@@ -18,18 +18,21 @@ class HistoryPage extends StatelessWidget {
       builder: (BuildContext context, Widget? _) {
         final AppStrings strings = AppStringsScope.of(context);
         final List<SensorSample> recent = controller.recent;
-        final List<double> hrValues = recent
-            .map((SensorSample s) => s.hr)
+        // 心拍ではなく体温の履歴。実機に心拍センサーが無いため
+        // (PROTOCOL_CHANGE.md 参照)。
+        final List<double> tempValues = recent
+            .map((SensorSample s) => s.bodyTempC)
             .whereType<double>()
             .toList();
 
         double? avg;
-        double? maxHr;
-        double? minHr;
-        if (hrValues.isNotEmpty) {
-          avg = hrValues.reduce((double a, double b) => a + b) / hrValues.length;
-          maxHr = hrValues.reduce((double a, double b) => a > b ? a : b);
-          minHr = hrValues.reduce((double a, double b) => a < b ? a : b);
+        double? maxTemp;
+        double? minTemp;
+        if (tempValues.isNotEmpty) {
+          avg = tempValues.reduce((double a, double b) => a + b) /
+              tempValues.length;
+          maxTemp = tempValues.reduce((double a, double b) => a > b ? a : b);
+          minTemp = tempValues.reduce((double a, double b) => a < b ? a : b);
         }
 
         return SafeArea(
@@ -66,7 +69,7 @@ class HistoryPage extends StatelessWidget {
                           ),
                         ),
                         Text(
-                          strings.recentCountLabel(hrValues.length),
+                          strings.recentCountLabel(tempValues.length),
                           style: const TextStyle(
                             fontSize: 11,
                             color: AppColors.textFaint,
@@ -75,7 +78,7 @@ class HistoryPage extends StatelessWidget {
                       ],
                     ),
                     const SizedBox(height: 10),
-                    if (hrValues.isEmpty)
+                    if (tempValues.isEmpty)
                       Padding(
                         padding: const EdgeInsets.symmetric(vertical: 24),
                         child: Center(
@@ -88,7 +91,7 @@ class HistoryPage extends StatelessWidget {
                     else
                       SizedBox(
                         height: 120,
-                        child: Sparkline(values: hrValues, color: AppColors.accent),
+                        child: Sparkline(values: tempValues, color: AppColors.accent),
                       ),
                   ],
                 ),
@@ -99,10 +102,10 @@ class HistoryPage extends StatelessWidget {
                   Expanded(child: _SummaryStat(label: strings.avgLabel, value: avg)),
                   const SizedBox(width: 10),
                   Expanded(
-                    child: _SummaryStat(label: strings.maxLabel, value: maxHr, color: AppColors.accent),
+                    child: _SummaryStat(label: strings.maxLabel, value: maxTemp, color: AppColors.accent),
                   ),
                   const SizedBox(width: 10),
-                  Expanded(child: _SummaryStat(label: strings.minLabel, value: minHr)),
+                  Expanded(child: _SummaryStat(label: strings.minLabel, value: minTemp)),
                 ],
               ),
               const SizedBox(height: 16),
@@ -167,7 +170,8 @@ class _SummaryStat extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           Text(
-            value == null ? '--' : value!.round().toString(),
+            // 体温は 0.1℃ の差が意味を持つので四捨五入しない。
+            value == null ? '--' : value!.toStringAsFixed(1),
             style: TextStyle(
               fontSize: 19,
               fontWeight: FontWeight.w800,

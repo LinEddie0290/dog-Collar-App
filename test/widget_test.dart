@@ -14,6 +14,7 @@ void main() {
     await tester.pump();
 
     expect(find.text('ホーム'), findsOneWidget);
+    expect(find.text('地図'), findsOneWidget);
     expect(find.text('履歴'), findsOneWidget);
     expect(find.text('設定'), findsOneWidget);
   });

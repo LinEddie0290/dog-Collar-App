@@ -22,11 +22,17 @@ class HomePage extends StatelessWidget {
       animation: controller,
       builder: (BuildContext context, Widget? _) {
         final AppStrings strings = AppStringsScope.of(context);
-        final double? hr = controller.latest?.hr;
+        // 体温が首輪の唯一の生体指標。心拍は実機に光学式センサーが無いため
+        // 表示自体をやめた(PROTOCOL_CHANGE.md 参照)。
+        final double? bodyTemp = controller.latest?.bodyTempC;
+        final double? ambientTemp = controller.latest?.ambientTempC;
+        // resp と battery は実機では常に null。モックでのみ値が入る。
         final double? resp = controller.latest?.resp;
         final int? battery = controller.latest?.battery;
-        final List<double> hrSeries =
-            controller.recent.map((SensorSample s) => s.hr).whereType<double>().toList();
+        final List<double> tempSeries = controller.recent
+            .map((SensorSample s) => s.bodyTempC)
+            .whereType<double>()
+            .toList();
 
         return SingleChildScrollView(
           padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
@@ -35,7 +41,12 @@ class HomePage extends StatelessWidget {
             children: <Widget>[
               _Header(status: controller.status, strings: strings),
               const SizedBox(height: 18),
-              _HeartRateCard(value: hr, series: hrSeries, strings: strings),
+              _BodyTempCard(
+                value: bodyTemp,
+                ambient: ambientTemp,
+                series: tempSeries,
+                strings: strings,
+              ),
               const SizedBox(height: 12),
               Row(
                 children: <Widget>[
@@ -141,10 +152,17 @@ class _StatusPill extends StatelessWidget {
   }
 }
 
-class _HeartRateCard extends StatelessWidget {
-  const _HeartRateCard({required this.value, required this.series, required this.strings});
+/// 体温カード。実機で唯一まともに取れる生体指標なので、ここを主役にしている。
+class _BodyTempCard extends StatelessWidget {
+  const _BodyTempCard({
+    required this.value,
+    required this.ambient,
+    required this.series,
+    required this.strings,
+  });
 
   final double? value;
+  final double? ambient;
   final List<double> series;
   final AppStrings strings;
 
@@ -167,9 +185,9 @@ class _HeartRateCard extends StatelessWidget {
             children: <Widget>[
               Row(
                 children: <Widget>[
-                  const Icon(Icons.favorite, color: Color(0xFFFFF7EF), size: 17),
+                  const Icon(Icons.thermostat, color: Color(0xFFFFF7EF), size: 17),
                   const SizedBox(width: 7),
-                  Text(strings.heartRateLabel, style: const TextStyle(color: Color(0xFFFFF7EF), fontSize: 13, fontWeight: FontWeight.w700)),
+                  Text(strings.bodyTempLabel, style: const TextStyle(color: Color(0xFFFFF7EF), fontSize: 13, fontWeight: FontWeight.w700)),
                 ],
               ),
               Text(
@@ -184,7 +202,8 @@ class _HeartRateCard extends StatelessWidget {
             textBaseline: TextBaseline.alphabetic,
             children: <Widget>[
               Text(
-                value != null ? value!.round().toString() : '--',
+                // 体温は 0.1℃ の差が意味を持つので小数1桁で出す。
+                value != null ? value!.toStringAsFixed(1) : '--',
                 style: const TextStyle(
                   color: Color(0xFFFFF7EF),
                   fontSize: 60,
@@ -193,7 +212,13 @@ class _HeartRateCard extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 8),
-              const Text('bpm', style: TextStyle(color: Color(0xE6FFF7EF), fontSize: 16, fontWeight: FontWeight.w600)),
+              Text(strings.celsiusUnit, style: const TextStyle(color: Color(0xE6FFF7EF), fontSize: 16, fontWeight: FontWeight.w600)),
+              const Spacer(),
+              if (ambient != null)
+                Text(
+                  '${strings.ambientTempLabel} ${ambient!.toStringAsFixed(1)}${strings.celsiusUnit}',
+                  style: const TextStyle(color: Color(0xE6FFF7EF), fontSize: 12),
+                ),
             ],
           ),
           const SizedBox(height: 12),

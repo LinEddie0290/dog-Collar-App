@@ -1,0 +1,16 @@
+name: collar_geo
+description: >
+  Pure-Dart location math for the smart pet-collar app: WGS84<->GCJ-02
+  coordinate conversion (for displaying on Amap), geofence enter/exit
+  detection, and a circle-as-polygon helper for map overlays. Zero UI /
+  zero Flutter imports, zero external dependencies — runnable and testable
+  with a bare `dart` SDK, same philosophy as ../collar_data.
+version: 0.1.0
+
+environment:
+  sdk: ">=3.0.0 <4.0.0"
+
+# No dependencies on purpose (same reasoning as ../collar_data): this keeps
+# `dart run bin/demo.dart` working completely offline, no `pub get` needed,
+# no Flutter needed. Self-test lives in bin/demo.dart as plain asserts
+# rather than package:test, for the same reason.

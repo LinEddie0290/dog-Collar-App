@@ -1,4 +1,44 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- ■ ネットワーク:高徳地図のタイル取得に必要。首輪とは Wi-Fi で通信
+         しない(首輪は nRF54LM20A で Wi-Fi ハードが無く、BLE 専用)。 -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <!-- 高徳地図の測位コンポーネントが Wi-Fi スキャンを使って現在地を求める
+         ため必要(周囲のアクセスポイントから位置を推定する仕組み)。首輪との
+         通信に Wi-Fi を使うという意味ではない。 -->
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+
+    <!-- ■ Bluetooth(Android 12 / API 31 以上)
+         首輪との通信はすべてここを通る。BLUETOOTH_SCAN に
+         neverForLocation を付けていないのは意図的で、地図に自分の現在地を
+         出すために ACCESS_FINE_LOCATION をどちらにせよ要求するため。
+         neverForLocation を付けても権限が1つ減るわけではないので、
+         付けない方が「スキャン結果から位置を推定しうる」実態に正直。 -->
+    <uses-permission android:name="android.permission.BLUETOOTH_SCAN" />
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+
+    <!-- ■ Bluetooth(Android 11 / API 30 以下)
+         旧 API では BLUETOOTH と BLUETOOTH_ADMIN が必要。API 31 以上では
+         上の2つに置き換わるので maxSdkVersion で打ち切る。これを付けないと
+         新しい端末で不要な権限が要求され、審査でも指摘される。 -->
+    <uses-permission android:name="android.permission.BLUETOOTH"
+        android:maxSdkVersion="30" />
+    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN"
+        android:maxSdkVersion="30" />
+
+    <!-- ■ 位置情報:2つの役目を兼ねている
+         (1) 地図に「自分の現在地」を出す
+         (2) Android 11 以下では BLE スキャン自体に FINE_LOCATION が必須
+             (周囲の Bluetooth 機器から位置が推定できてしまうため、Google が
+              そういう制約にしている)
+         犬の位置は首輪の GPS から来るので、この権限が無くても犬は地図に出る。 -->
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+
+    <!-- ■ BLE が無い端末にはインストールさせない。首輪と通信できないため。 -->
+    <uses-feature android:name="android.hardware.bluetooth_le"
+        android:required="true" />
+
     <application
         android:label="collar_app"
         android:name="${applicationName}"

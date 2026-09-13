@@ -46,3 +46,7 @@ app.*.map.json
 
 # Widget Preview related
 .widget_preview/
+
+# クラウド側からファイルを書き換えたときに FUSE マウントが残す一時ファイル。
+# 中身は「削除されたが開かれていた古いファイル」で、リポジトリには要らない。
+.fuse_hidden*

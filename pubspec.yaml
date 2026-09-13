@@ -37,10 +37,26 @@ dependencies:
 
   collar_data:
     path: packages/collar_data
+  collar_geo:
+    path: packages/collar_geo
+  # 心拍・呼吸の算出（純Dart、FFT不要）。2026-09-12 の実測で検証済み。
+  collar_vitals:
+    path: packages/collar_vitals
+  amap_map: ^1.0.15
+  # amap_map の土台。LatLng / AMapApiKey などを直接 import しているので、
+  # 推移的依存に頼らず明示的に書いておく(depend_on_referenced_packages 対策)。
+  x_amap_base: ^1.0.3
   path_provider: ^2.1.1
   shared_preferences: ^2.3.2
   flutter_localizations:
     sdk: flutter
+  flutter_blue_plus: ^2.3.12
+  # 1測定を獣医に渡せる PDF 1枚にする。純Dart実装なのでネイティブ設定は不要。
+  pdf: ^3.11.1
+  # 出来上がったファイルを iOS の共有シートに渡す（ファイルに保存 / メール /
+  # AirDrop）。iOS ではアプリのサンドボックス外に書けないので、共有シートを
+  # 通すのが唯一の「ダウンロード」の形になる。
+  share_plus: ^10.1.2
 
 dev_dependencies:
   flutter_test:
@@ -63,6 +79,12 @@ flutter:
   # included with your application, so that you can use the icons in
   # the material Icons class.
   uses-material-design: true
+
+  assets:
+    # PDF に日本語を出すためのフォントを置く場所。package:pdf は端末の
+    # フォントを使えないので TTF の同梱が必要。ファイルが無くても書き出しは
+    # 動く(英字ラベルにフォールバックする)。置き方は assets/fonts/README.txt。
+    - assets/fonts/
 
   # To add assets to your application, add an assets section, like this:
   # assets:
