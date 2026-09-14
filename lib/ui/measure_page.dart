@@ -357,6 +357,13 @@ class _LiveCard extends StatelessWidget {
             ),
           // 2つの数え方が食い違ったら、その場で言う。あとで履歴を見て
           // 「あの数字は何だったのか」と考えることになるのを避ける。
+          if (r != null && r.rateFromBeats)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text(s.rateFromBeatsNote,
+                  style: const TextStyle(
+                      fontSize: 11.5, color: AppColors.textSecondary)),
+            ),
           if (r != null && r.rateDisagrees)
             Padding(
               padding: const EdgeInsets.only(top: 10),
@@ -482,6 +489,13 @@ class _ResultCard extends StatelessWidget {
           const SizedBox(height: 6),
           BeatIntervalChart(
               intervalsMs: result.beatIntervalsMs, emptyLabel: s.noDataYet),
+          if (result.rateFromBeats)
+            Padding(
+              padding: const EdgeInsets.only(top: 10),
+              child: Text(s.rateFromBeatsNote,
+                  style: const TextStyle(
+                      fontSize: 12, color: AppColors.textSecondary)),
+            ),
           if (result.rateDisagrees)
             Padding(
               padding: const EdgeInsets.only(top: 12),
@@ -688,6 +702,8 @@ class _Card extends StatelessWidget {
 String? _caveatText(AppStrings s, MeasurementRecord? r) =>
     switch (r?.caveatCode) {
       'unusable' => s.caveatUnusable,
+      'irregular' => s.caveatIrregular,
+      'intermittent' => s.caveatIntermittent,
       'rate_disagrees' => s.caveatRateDisagrees,
       'fair' => s.caveatFair,
       'gaps' => s.caveatManyGaps,

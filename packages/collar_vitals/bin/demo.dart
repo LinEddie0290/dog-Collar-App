@@ -173,6 +173,18 @@ void runSynthetic() {
   check('拍を数えた心拍も 78 bpm 付近になる',
       rb.beatRateBpm != null && (rb.beatRateBpm! - 78).abs() <= 8,
       '${rb.beatRateBpm?.toStringAsFixed(1)}');
+  // 格下げの条件を書き間違えると good が一切出なくなる(2026-09-13)。
+  // 「食い違っていないなら格下げしない」を明示的に押さえる。
+  final VitalsResult rg = analyzer.analyze(
+      synthesise(bpm: 100, seconds: 60, sampleRateHz: 104),
+      sampleRateHz: 104);
+  check('食い違っていない測定は good のまま（不要な格下げをしない）',
+      rg.quality == VitalsQuality.good && !rg.rateDisagrees,
+      '${rg.quality.name} / 信頼度 '
+      '${rg.heartRateConfidence.toStringAsFixed(2)} / '
+      '自己相関 ${rg.heartRateBpm?.toStringAsFixed(1)} / '
+      '拍 ${rg.beatRateBpm?.toStringAsFixed(1)}');
+
   check('素直な信号では食い違い警告を出さない', !rb.rateDisagrees,
       '自己相関 ${rb.heartRateBpm?.toStringAsFixed(1)} / '
       '拍 ${rb.beatRateBpm?.toStringAsFixed(1)}');
@@ -188,6 +200,86 @@ void runSynthetic() {
   );
   check('食い違いは結果に載る（表示側が警告を出せる）',
       fake.rateDisagrees && fake.beatRateBpm == 70);
+
+  print('\n5. 拍の列の素性 — しきい値を決めるための実測値');
+  // ここは合否を問わない。rMAD と網羅率でいずれ足切りしたいが、
+  // どの値なら正しい測定を落とさないのかが、まだ分かっていない。
+  // 判断できるだけの数値が並ぶまで、関門は入れない(2026-09-13 に
+  // 2回誤爆させた)。まず分布を見る。
+  print('   ${"信号".padRight(26)} ${"心拍".padLeft(8)} '
+      '${"rMAD%".padLeft(7)} ${"網羅%".padLeft(7)} ${"CV%".padLeft(7)}  品質');
+  void row(String label, VitalsResult r) {
+    print('   ${label.padRight(26)} '
+        '${(r.heartRateBpm?.toStringAsFixed(1) ?? "—").padLeft(8)} '
+        '${(r.beatIntervalRmadPercent?.toStringAsFixed(1) ?? "—").padLeft(7)} '
+        '${(r.beatCoveragePercent?.toStringAsFixed(0) ?? "—").padLeft(7)} '
+        '${(r.beatIntervalCvPercent?.toStringAsFixed(0) ?? "—").padLeft(7)}  '
+        '${r.quality.name}');
+  }
+  for (final double b in <double>[80, 100, 130, 170]) {
+    row('合成 1山 ${b.toStringAsFixed(0)} bpm',
+        analyzer.analyze(synthesise(bpm: b, seconds: 60, sampleRateHz: fs),
+            sampleRateHz: fs));
+  }
+
+  // 拍をでたらめな間隔(0.2〜1.6秒)で並べた信号。これは棄却したい側。
+  final math.Random jr = math.Random(5);
+  const double fsJ = 104.0;
+  final List<double> jittery = List<double>.generate(
+      (60 * fsJ).round(), (_) => 9.806 + 0.02 * (jr.nextDouble() - 0.5));
+  double next = 0;
+  while (next < 58) {
+    final int at = (next * fsJ).round();
+    for (int k = 0; k < 26; k++) {
+      if (at + k < jittery.length) {
+        jittery[at + k] += 0.05 * beatWave(k / fsJ);
+      }
+    }
+    next += 0.2 + jr.nextDouble() * 1.4;
+  }
+  row('でたらめな拍(棄却したい)',
+      analyzer.analyze(jittery, sampleRateHz: fsJ));
+
+  print('   ※ しきい値 rMAD 35% は、この表(通したい側 9.2〜26.8%)と');
+  print('      実機の記録8件(棄却したい側 43.9〜57.5%)の隙間から決めた。');
+
+  // 実機の記録から取った拍間隔のばらつき。しきい値の根拠そのものなので、
+  // ここに数値として残す。2026-09-13 の8件はいずれも「波の周期」と
+  // 「拍の数え上げ」が食い違っていた(224 対 70 など)。
+  const List<double> fieldRmad = <double>[
+    43.9, 44.7, 47.4, 50.6, 53.1, 54.3, 54.5, 57.5
+  ];
+  final double worstGood = <double>[9.2, 13.7, 18.3, 26.8]
+      .reduce((double a, double b) => a > b ? a : b);
+  final double bestBad =
+      fieldRmad.reduce((double a, double b) => a < b ? a : b);
+  check(
+      'しきい値 35% が両側の実測値の隙間に入っている',
+      worstGood < 35 && 35 < bestBad,
+      '通したい側の最悪 ${worstGood.toStringAsFixed(1)}% < 35% < '
+      '棄却したい側の最良 ${bestBad.toStringAsFixed(1)}%');
+
+  print('\n6. 正しい測定を落としていないか（関門を入れたときの見張り）');
+  // 2026-09-13 に、足切りを入れて 80/100/130/170 bpm を全部
+  // 「算出不可」にした。正しい測定を棄却するのは、参考値として出すより
+  // 害が大きい。関門を触るときは必ずここが通ることを確かめる。
+  for (final double trueBpm in <double>[80, 100, 130, 170]) {
+    final VitalsResult g = analyzer.analyze(
+        synthesise(bpm: trueBpm, seconds: 60, sampleRateHz: fs),
+        sampleRateHz: fs);
+    check(
+        '${trueBpm.toStringAsFixed(0)} bpm を算出不可にしていない',
+        g.quality != VitalsQuality.unusable && g.heartRateBpm != null,
+        '${g.quality.name} / rMAD '
+        '${g.beatIntervalRmadPercent?.toStringAsFixed(1)}% / 網羅 '
+        '${g.beatCoveragePercent?.toStringAsFixed(0)}%');
+    // しきい値に余裕があることも見る。ぎりぎりだと、少し条件が変わった
+    // だけで正しい測定が落ちる。
+    check(
+        '${trueBpm.toStringAsFixed(0)} bpm の rMAD がしきい値 35% を下回る',
+        (g.beatIntervalRmadPercent ?? 999) < 35,
+        '${g.beatIntervalRmadPercent?.toStringAsFixed(1)}%');
+  }
 }
 
 void runRealCapture(String path) {

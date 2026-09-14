@@ -2,6 +2,8 @@ import 'dart:io';
 import 'dart:math' as math;
 import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart'
+    show debugPrint, debugPrintStack;
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:path_provider/path_provider.dart';
 import 'package:pdf/pdf.dart';
@@ -107,9 +109,15 @@ class RecordExport {
     kv('respiration_per_min', r.respirationPerMin?.toStringAsFixed(1));
     kv('body_temp_c', r.bodyTempC?.toStringAsFixed(1));
     kv('quality', r.quality);
+    // 保存時の判定と、今の基準で見直した判定。違っていれば見直しのほうが新しい。
+    kv('quality_now', r.effectiveQuality);
     kv('beat_count', r.beatCount);
     kv('beat_interval_cv_percent',
         r.beatIntervalCvPercent?.toStringAsFixed(1));
+    // 飛び値に強いばらつき。品質の判定に使っているのはこちら。
+    kv('beat_interval_rmad_percent',
+        r.beatIntervalRmadPercent?.toStringAsFixed(1));
+    kv('beat_coverage_percent', r.beatCoveragePercent?.toStringAsFixed(0));
     kv('sdnn_ms', r.sdnnMs?.toStringAsFixed(1));
     kv('rmssd_ms', r.rmssdMs?.toStringAsFixed(1));
     kv('dropped_packets', r.gapCount);
@@ -138,6 +146,26 @@ class RecordExport {
     final AppStrings s =
         cjk == null ? AppStrings.forLanguage(AppLanguage.en) : strings;
 
+    // 組み込みフォント(Helvetica)に無い文字を渡すと package:pdf は例外を
+    // 投げる。豆腐になるのではなく、書き出し全体が失敗する。メモや姿勢は
+    // 利用者が自由に書ける欄なので、日本語が入っていれば必ずここに来る。
+    // フォントが無いときは、載せる文字をラテン文字に限る。
+    String t(String? v) {
+      final String x = v ?? '';
+      if (cjk != null) return x;
+      final StringBuffer b = StringBuffer();
+      bool dropped = false;
+      for (final int c in x.runes) {
+        if (c < 0x2500 && c != 0x3000) {
+          b.writeCharCode(c);
+        } else {
+          dropped = true;
+        }
+      }
+      final String out = b.toString();
+      return dropped && out.trim().isEmpty ? '(non-Latin text omitted)' : out;
+    }
+
     final pw.ThemeData theme = cjk == null
         ? pw.ThemeData.base()
         : pw.ThemeData.withFont(base: cjk, bold: cjk, italic: cjk);
@@ -146,7 +174,7 @@ class RecordExport {
     const PdfColor sub = PdfColor.fromInt(0xFF8A7C70);
     const PdfColor accent = PdfColor.fromInt(0xFFB85042);
     const PdfColor good = PdfColor.fromInt(0xFF6E9271);
-    final PdfColor qColor = switch (r.quality) {
+    final PdfColor qColor = switch (r.effectiveQuality) {
       'good' => good,
       'fair' => const PdfColor.fromInt(0xFFD9A441),
       _ => accent,
@@ -160,11 +188,11 @@ class RecordExport {
         build: (pw.Context ctx) => pw.Column(
           crossAxisAlignment: pw.CrossAxisAlignment.start,
           children: <pw.Widget>[
-            pw.Text(s.reportTitle,
+            pw.Text(t(s.reportTitle),
                 style: pw.TextStyle(
                     fontSize: 19, fontWeight: pw.FontWeight.bold, color: ink)),
             pw.SizedBox(height: 3),
-            pw.Text(_stamp(r.startedAt),
+            pw.Text(t(_stamp(r.startedAt)),
                 style: pw.TextStyle(fontSize: 10.5, color: sub)),
             pw.SizedBox(height: 18),
 
@@ -191,7 +219,7 @@ class RecordExport {
                     border: pw.Border.all(color: qColor, width: 0.9),
                     borderRadius: pw.BorderRadius.circular(9),
                   ),
-                  child: pw.Text(_qualityLabel(r.quality, s),
+                  child: pw.Text(t(_qualityLabel(r.effectiveQuality, s)),
                       style: pw.TextStyle(
                           fontSize: 10,
                           fontWeight: pw.FontWeight.bold,
@@ -201,11 +229,11 @@ class RecordExport {
             ),
             pw.SizedBox(height: 16),
 
-            _table(r, s, ink, sub),
+            _table(r, s, ink, sub, t),
             pw.SizedBox(height: 16),
 
             if (r.beatIntervalsMs.length >= 3) ...<pw.Widget>[
-              pw.Text(s.beatIntervalsTitle,
+              pw.Text(t(s.beatIntervalsTitle),
                   style: pw.TextStyle(
                       fontSize: 10.5,
                       fontWeight: pw.FontWeight.bold,
@@ -218,8 +246,9 @@ class RecordExport {
               ),
               pw.SizedBox(height: 4),
               pw.Text(
-                  '${s.beatCvLabel} '
-                  '${r.beatIntervalCvPercent?.toStringAsFixed(1) ?? "--"} %',
+                  t('${s.beatCvLabel} '
+                      '${r.beatIntervalRmadPercent?.toStringAsFixed(1) ?? "--"}'
+                      ' %'),
                   style: pw.TextStyle(fontSize: 9.5, color: sub)),
               pw.SizedBox(height: 16),
             ],
@@ -236,16 +265,16 @@ class RecordExport {
               child: pw.Column(
                 crossAxisAlignment: pw.CrossAxisAlignment.start,
                 children: <pw.Widget>[
-                  pw.Text(s.notEcgDisclaimer,
+                  pw.Text(t(s.notEcgDisclaimer),
                       style: pw.TextStyle(
                           fontSize: 9.5, lineSpacing: 2, color: accent)),
                   pw.SizedBox(height: 5),
-                  pw.Text(s.hrvClinicalNote,
+                  pw.Text(t(s.hrvClinicalNote),
                       style: pw.TextStyle(
                           fontSize: 9.5, lineSpacing: 2, color: sub)),
                   if (r.caveatCode != null) ...<pw.Widget>[
                     pw.SizedBox(height: 5),
-                    pw.Text(_caveat(r.caveatCode!, s),
+                    pw.Text(t(_caveat(r.caveatCode!, s)),
                         style: pw.TextStyle(
                             fontSize: 9.5, lineSpacing: 2, color: accent)),
                   ],
@@ -253,11 +282,11 @@ class RecordExport {
               ),
             ),
             pw.SizedBox(height: 7),
-            pw.Text(s.reportMeasuredWith,
+            pw.Text(t(s.reportMeasuredWith),
                 style: pw.TextStyle(fontSize: 8.5, color: sub)),
             if (cjk == null) ...<pw.Widget>[
               pw.SizedBox(height: 2),
-              pw.Text(strings.reportNoJapaneseFont,
+              pw.Text(t(s.reportNoJapaneseFont),
                   style: pw.TextStyle(fontSize: 8, color: sub)),
             ],
           ],
@@ -267,8 +296,8 @@ class RecordExport {
     return doc.save();
   }
 
-  static pw.Widget _table(
-      MeasurementRecord r, AppStrings s, PdfColor ink, PdfColor sub) {
+  static pw.Widget _table(MeasurementRecord r, AppStrings s, PdfColor ink,
+      PdfColor sub, String Function(String?) t) {
     final List<(String, String)> rows = <(String, String)>[
       (s.durationLabel, '${r.durationSeconds.toStringAsFixed(0)} ${s.secondsUnit}'),
       (s.respirationShort,
@@ -277,12 +306,14 @@ class RecordExport {
         (s.bodyTempLabel, '${r.bodyTempC!.toStringAsFixed(1)} ${s.celsiusUnit}'),
       (s.beatCountLabel, '${r.beatCount}'),
       (s.beatCvLabel,
-          '${r.beatIntervalCvPercent?.toStringAsFixed(1) ?? "--"} %'),
+          '${r.beatIntervalRmadPercent?.toStringAsFixed(1) ?? "--"} %'),
+      if (r.beatCoveragePercent != null)
+        (s.coverageLabel, '${r.beatCoveragePercent!.round()} %'),
       ('SDNN', '${r.sdnnMs?.toStringAsFixed(0) ?? "--"} ms'),
       ('RMSSD', '${r.rmssdMs?.toStringAsFixed(0) ?? "--"} ms'),
       (s.droppedPackets, '${r.gapCount}'),
       if (r.imuRateHz != null) (s.measuredRate, '${r.imuRateHz} Hz'),
-      if (r.posture != null) (s.postureLabel, r.posture!),
+      if (r.posture != null) (s.postureLabel, t(r.posture)),
     ];
 
     return pw.Table(
@@ -298,11 +329,12 @@ class RecordExport {
         for (int i = 0; i < rows.length; i += 2)
           pw.TableRow(
             children: <pw.Widget>[
-              _cell(rows[i].$1, sub, bold: false),
-              _cell(rows[i].$2, ink, bold: true),
-              _cell(i + 1 < rows.length ? rows[i + 1].$1 : '', sub,
+              _cell(t(rows[i].$1), sub, bold: false),
+              _cell(t(rows[i].$2), ink, bold: true),
+              _cell(t(i + 1 < rows.length ? rows[i + 1].$1 : ''), sub,
                   bold: false),
-              _cell(i + 1 < rows.length ? rows[i + 1].$2 : '', ink, bold: true),
+              _cell(t(i + 1 < rows.length ? rows[i + 1].$2 : ''), ink,
+                  bold: true),
             ],
           ),
       ],
@@ -382,21 +414,24 @@ class RecordExport {
     }
     final String stem = '${dir.path}/${baseName(r)}';
     final List<String> out = <String>[];
-    if (pdf) {
-      // PDF の生成で転んでも CSV は渡せるようにしておく。獣医に渡すものが
-      // 何も無い、という状態だけは作らない。
-      try {
-        final File f = File('$stem.pdf');
-        await f.writeAsBytes(await buildPdf(r, s));
-        out.add(f.path);
-      } catch (_) {
-        if (!csv) rethrow; // PDF だけを頼まれていたなら黙って消せない
-      }
-    }
+    // CSV を先に書く。純粋な文字列処理なので失敗しようがない。PDF の生成で
+    // 転んでも、渡せるものが1つは残る。
     if (csv) {
       final File f = File('$stem.csv');
       await f.writeAsString(buildCsv(r, s));
       out.add(f.path);
+    }
+    if (pdf) {
+      try {
+        final File f = File('$stem.pdf');
+        await f.writeAsBytes(await buildPdf(r, s));
+        out.add(f.path);
+      } catch (e, st) {
+        // 原因が分からないまま「失敗しました」で終わらせない。
+        debugPrint('PDF の生成に失敗: $e');
+        debugPrintStack(stackTrace: st);
+        if (out.isEmpty) rethrow; // PDF だけを頼まれていたなら黙って消せない
+      }
     }
     return out;
   }
@@ -443,6 +478,8 @@ class RecordExport {
 
   static String _caveat(String code, AppStrings s) => switch (code) {
         'unusable' => s.caveatUnusable,
+        'irregular' => s.caveatIrregular,
+        'intermittent' => s.caveatIntermittent,
         'rate_disagrees' => s.caveatRateDisagrees,
         'fair' => s.caveatFair,
         'gaps' => s.caveatManyGaps,

@@ -141,11 +141,61 @@ class MeasurementRecord {
   /// it in the user's language. [caveat] itself stays Japanese because the CSV
   /// export goes to a Japanese vet.
   String? get caveatCode {
-    if (quality == 'unusable') return 'unusable';
+    if (quality == 'unusable' || isIrregular) {
+      return isIrregular ? 'irregular' : 'unusable';
+    }
     if (rateDisagrees) return 'rate_disagrees';
     if (quality == 'fair') return 'fair';
     if (gapCount > beatCount * 0.1) return 'gaps';
     return null;
+  }
+
+  /// 拍の列が拍の列と呼べないほど乱れている。しきい値 35% の根拠は
+  /// [VitalsAnalyzer] 側のコメントにある（両側の実測値から決めた）。
+  bool get isIrregular {
+    final double? rmad = beatIntervalRmadPercent;
+    return rmad != null && rmad > 35;
+  }
+
+  /// 画面に出す品質。
+  ///
+  /// 保存されている [quality] は測定した時点の判定で、その後に判定の作りが
+  /// 変わっても書き換わらない。保存済みの数値から今の基準で見直したものを
+  /// 表示に使う。そうしないと、チップが「信頼できる」なのに注記が
+  /// 「参考値です」と出る、という食い違いが起きる（実機で起きた）。
+  ///
+  /// 保存されている値は書き換えない。測定は起きた出来事の記録なので、
+  /// あとから中身を書き換えるのは筋が違う。表示のときだけ読み替える。
+  String get effectiveQuality {
+    if (quality == 'unusable' || isIrregular) return 'unusable';
+    if (rateDisagrees && quality == 'good') return 'fair';
+    return quality;
+  }
+
+  /// 拍間隔のばらつき（中央値からのずれの中央値 ÷ 中央値、%）。
+  ///
+  /// 標準偏差の変動係数([beatIntervalCvPercent])は数個の飛び値で壊れる。
+  /// 実測で、でたらめに並べた拍の変動係数 25% が正しい信号の 33〜50% より
+  /// 小さくなり、大小が逆転した。画面に出すのはこちらを使う。
+  double? get beatIntervalRmadPercent {
+    if (beatIntervalsMs.length < 3) return null;
+    final List<double> sorted = List<double>.of(beatIntervalsMs)..sort();
+    final double median = sorted[sorted.length ~/ 2];
+    if (median <= 0) return null;
+    final List<double> dev = beatIntervalsMs
+        .map((double v) => (v - median).abs())
+        .toList(growable: false)
+      ..sort();
+    return dev[dev.length ~/ 2] / median * 100;
+  }
+
+  /// 拍が測定時間のどれだけを覆っているか（%）。
+  /// 途切れ途切れにしか拾えていない測定を見つけるための物差し。
+  double? get beatCoveragePercent {
+    if (beatIntervalsMs.length < 3 || durationSeconds <= 0) return null;
+    final List<double> sorted = List<double>.of(beatIntervalsMs)..sort();
+    final double median = sorted[sorted.length ~/ 2];
+    return beatIntervalsMs.length * median / 1000 / durationSeconds * 100;
   }
 
   /// 拍を1つずつ数えて出した心拍。保存済みの拍間隔から求めるので、

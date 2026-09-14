@@ -181,6 +181,8 @@ String _stamp(DateTime d) =>
 /// に置いてあるので、ここは文言を選ぶだけ。
 String? _caveatText(AppStrings s, MeasurementRecord r) => switch (r.caveatCode) {
       'unusable' => s.caveatUnusable,
+      'irregular' => s.caveatIrregular,
+      'intermittent' => s.caveatIntermittent,
       'rate_disagrees' => s.caveatRateDisagrees,
       'fair' => s.caveatFair,
       'gaps' => s.caveatManyGaps,
@@ -205,7 +207,7 @@ class _RecordTileState extends State<_RecordTile> {
   Widget build(BuildContext context) {
     final AppStrings s = AppStringsScope.of(context);
     final MeasurementRecord r = widget.record;
-    final (Color color, IconData icon, String qLabel) = switch (r.quality) {
+    final (Color color, IconData icon, String qLabel) = switch (r.effectiveQuality) {
       'good' => (AppColors.connected, Icons.check_circle, s.qualityGood),
       'fair' => (AppColors.accent2, Icons.error_outline, s.qualityFair),
       _ => (AppColors.accent, Icons.cancel, s.qualityUnusable),
@@ -278,7 +280,10 @@ class _RecordTileState extends State<_RecordTile> {
                 if (r.beatRateBpm != null)
                   _M(s.beatRateLabel, '${r.beatRateBpm!.round()} bpm'),
                 _M(s.beatCvLabel,
-                    '${r.beatIntervalCvPercent?.toStringAsFixed(1) ?? "--"} %'),
+                    '${r.beatIntervalRmadPercent?.toStringAsFixed(1) ?? "--"} %'),
+                if (r.beatCoveragePercent != null)
+                  _M(s.coverageLabel,
+                      '${r.beatCoveragePercent!.round()} %'),
                 _M('SDNN', '${r.sdnnMs?.toStringAsFixed(0) ?? "--"} ms'),
                 _M('RMSSD', '${r.rmssdMs?.toStringAsFixed(0) ?? "--"} ms'),
                 _M(s.droppedPackets, '${r.gapCount}'),

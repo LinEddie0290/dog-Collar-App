@@ -39,7 +39,8 @@ class _RawSignalExportButtonState extends State<RawSignalExportButton> {
       );
       if (!mounted) return;
       await Share.shareXFiles(<XFile>[XFile(path)],
-          subject: 'raw signal ${RecordExport.baseName(widget.record)}');
+          subject: 'raw signal ${RecordExport.baseName(widget.record)}',
+          sharePositionOrigin: _origin());
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context)
@@ -47,6 +48,23 @@ class _RawSignalExportButtonState extends State<RawSignalExportButton> {
     } finally {
       if (mounted) setState(() => _busy = false);
     }
+  }
+
+
+  /// 共有シートを出す位置。iPad では吹き出しの根元になる。
+  ///
+  /// iPhone でも省略できない。省略すると share_plus が
+  /// `sharePositionOrigin: argument must be set` で失敗する。
+  /// ゼロ矩形も拒否されるので、押されたボタン自身の位置を渡す。
+  Rect _origin() {
+    final RenderObject? box = context.findRenderObject();
+    if (box is RenderBox && box.hasSize && box.size.width > 0) {
+      return box.localToGlobal(Offset.zero) & box.size;
+    }
+    // 取れなければ画面中央の小さな矩形。ゼロでなければ通る。
+    final Size s = MediaQuery.sizeOf(context);
+    return Rect.fromCenter(
+        center: Offset(s.width / 2, s.height / 2), width: 1, height: 1);
   }
 
   @override

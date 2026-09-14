@@ -71,6 +71,7 @@ class VitalsResult {
     this.unusableReason,
     this.beatRateBpm,
     this.rateDisagrees = false,
+    this.rateFromBeats = false,
   });
 
   final double sampleRateHz;
@@ -105,6 +106,16 @@ class VitalsResult {
   /// このとき品質は [VitalsQuality.good] にはしない。2つの独立した数え方が
   /// 一致しないものを「信頼できる」と表示してはいけない。
   final bool rateDisagrees;
+
+  /// [heartRateBpm] が自己相関ではなく拍の数え上げから来ている。
+  ///
+  /// 2つが食い違ったときは拍を数えた値を採る。理由は実機で2回続けて
+  /// 確かめられたため(2026-09-13): 画面の拍のしるしが 72 /分のときに
+  /// 自己相関は 137 bpm、別の記録では拍が 70 bpm のときに 224 bpm。
+  /// 224 は探索範囲の上限 220 に張り付いた値で、自己相関が失敗したときの
+  /// 典型的な形。400 Hz の実測データでは両者が一致する(77〜78 bpm)ので、
+  /// 検証できている場合にこの選び方が害になることはない。
+  final bool rateFromBeats;
 
   /// Individual beat times, for plotting and for variability.
   final List<double> beatTimesSeconds;
@@ -149,6 +160,17 @@ class VitalsResult {
 
   /// Beats actually detected, for the record shown to a vet.
   int get beatCount => beatTimesSeconds.length;
+
+  /// 拍間隔のばらつき（中央値からのずれの中央値 ÷ 中央値、%）。
+  /// [beatIntervalCvPercent] より飛び値に強く、画面に出すのはこちら。
+  double? get beatIntervalRmadPercent => beatIntervalsMs.length < 3
+      ? null
+      : VitalsAnalyzer._rmadPercent(beatIntervalsMs);
+
+  /// 拍が測定時間のどれだけを覆っているか（%）。
+  double? get beatCoveragePercent => beatIntervalsMs.length < 3
+      ? null
+      : VitalsAnalyzer._coveragePercent(beatIntervalsMs, durationSeconds);
 
   @override
   String toString() => 'VitalsResult(${quality.name}, '
@@ -197,6 +219,34 @@ class VitalsAnalyzer {
   /// これ未満のサンプリングでは 8 Hz 以上の心弾動成分がほとんど残らないので、
   /// 心拍は「算出不可」とする。LSM6DS3TR-C の設定値で言えば 52 Hz 以上。
   static const double minSampleRateHz = 40.0;
+
+  /// 拍間隔のばらつき。中央値からのずれの中央値 ÷ 中央値（%）。
+  ///
+  /// 標準偏差ではなく中央値を使うのは、拍を1つ数え落とすと間隔が2倍の値に
+  /// なり、それが数個混ざるだけで標準偏差が壊れるから。中央値なら半分以上が
+  /// 正しければ保たれる。
+  static double _rmadPercent(List<double> intervals) {
+    final List<double> sorted = List<double>.of(intervals)..sort();
+    final double median = sorted[sorted.length ~/ 2];
+    if (median <= 0) return 999;
+    final List<double> dev = intervals
+        .map((double v) => (v - median).abs())
+        .toList(growable: false)
+      ..sort();
+    return dev[dev.length ~/ 2] / median * 100;
+  }
+
+  /// 拍が測定時間のどれだけを覆っているか（%）。
+  ///
+  /// 拍の数 × 間隔の中央値 ÷ 測定時間。途切れ途切れにしか拾えていない
+  /// 測定を見つけるための物差し。間隔のばらつきだけでは、拾えた区間が
+  /// 揃っていれば通ってしまう。
+  static double _coveragePercent(List<double> intervals, double seconds) {
+    if (seconds <= 0) return 0;
+    final List<double> sorted = List<double>.of(intervals)..sort();
+    final double median = sorted[sorted.length ~/ 2];
+    return intervals.length * median / 1000 / seconds * 100;
+  }
 
   /// [minSeconds] は「この長さに足りなければ算出しない」境界。既定は
   /// [minDurationSeconds]（保存する測定の基準）。画面に出す途中の推定値は
@@ -347,6 +397,7 @@ class VitalsAnalyzer {
     }
 
     // 拍の間隔の中央値から出した心拍。自己相関の答えと突き合わせる。
+    // 中央値なので、数え落としで1つ2つ長い間隔が混ざっても崩れない。
     double? beatRate;
     if (intervals.length >= 3) {
       final List<double> sorted = List<double>.of(intervals)..sort();
@@ -354,24 +405,65 @@ class VitalsAnalyzer {
       if (median > 0) beatRate = 60000 / median;
     }
     bool disagrees = false;
+    bool fromBeats = false;
+    bool irregular = false;
     if (bpm != null && beatRate != null && bpm > 0) {
       final double ratio = beatRate / bpm;
       disagrees = ratio < 0.75 || ratio > 1.33;
-    }
-    if (disagrees && quality == VitalsQuality.good) {
-      // 2つの独立した数え方が一致しないものを「信頼できる」とは言わない。
-      quality = VitalsQuality.fair;
+      if (disagrees &&
+          beatRate >= range.minBpm &&
+          beatRate <= range.maxBpm) {
+        // 食い違ったら拍を数えた値を採る。拍は1つずつ数えられるので
+        // 確かめようがあるが、自己相関の周期は確かめようがない。
+        bpm = beatRate;
+        fromBeats = true;
+      }
+      if (disagrees && quality == VitalsQuality.good) {
+        // 2つの独立した数え方が一致しないものを「信頼できる」とは言わない。
+        // 条件に disagrees を入れ忘れると、拍が数えられた測定が全部
+        // 参考値に落ちて good が一切出なくなる(2026-09-13 にやった)。
+        quality = VitalsQuality.fair;
+      }
     }
 
+    // 「その拍の列は本当に拍の列か」の関門。
+    //
+    // 物差しは rMAD（中央値からのずれの中央値 ÷ 中央値）。標準偏差の変動
+    // 係数は使えない。でたらめに並べた拍の変動係数 25% が正しい信号の
+    // 33〜50% より小さく、大小が逆転していた。
+    //
+    // しきい値 35% は、同じ実装で測った両側の実測値から決めた
+    // (2026-09-13、すべて Dart 側の値):
+    //
+    //   通したい側 — 合成信号 80/100/130/170 bpm → 9.2 / 13.7 / 18.3 / 26.8%
+    //   棄却したい側 — 実機の記録8件（いずれも2つの数え方が食い違った）
+    //                  → 43.9 / 44.7 / 47.4 / 50.6 / 53.1 / 54.3 / 54.5 / 57.5%
+    //
+    // 26.8 と 43.9 の間に隙間がある。35% はその真ん中。
+    //
+    // 網羅率（拍の数 × 間隔の中央値 ÷ 測定時間）は関門にしない。実機の
+    // 記録が 13〜86% で、合成信号の 62〜79% と重なって分離しないため。
+    // 数値としては意味があるので表示と CSV には残す。
+    //
+    // Python で測った値(合成 80 bpm で 3.8%)を根拠にしようとして失敗した。
+    // 実装が違えば値も違う。しきい値は必ず同じ実装の値から決める。
+    if (intervals.length >= 3 &&
+        quality != VitalsQuality.unusable &&
+        _rmadPercent(intervals) > 35) {
+      quality = VitalsQuality.unusable;
+      irregular = true;
+    }
     return VitalsResult(
       sampleRateHz: sampleRateHz,
       durationSeconds: duration,
       quality: quality,
       beatRateBpm: beatRate,
       rateDisagrees: disagrees,
+      rateFromBeats: fromBeats,
       heartRateBpm: quality == VitalsQuality.unusable ? null : bpm,
-      unusableReason:
-          quality == VitalsQuality.unusable ? 'no_periodicity' : null,
+      unusableReason: quality != VitalsQuality.unusable
+          ? null
+          : (irregular ? 'irregular' : 'no_periodicity'),
       heartRateConfidence: confidence,
       beatTimesSeconds: beatTimes,
       beatIntervalsMs: intervals,
