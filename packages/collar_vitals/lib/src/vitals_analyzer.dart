@@ -25,9 +25,20 @@ import 'biquad.dart';
 class HeartRateRange {
   const HeartRateRange({required this.minBpm, required this.maxBpm});
 
-  /// Wide enough for any dog from a resting Great Dane to an excited puppy.
+  /// Wide enough for any resting dog, from a large breed at rest to an
+  /// excited small one — **for a single resting measurement**, which is what
+  /// this app does today.
+  ///
+  /// 2026-09-15、文献調査(docs/research/犬の心拍数.md)で 50–220 を見直した。
+  /// 下は 50 だと小型犬の実測最小値 41.8 bpm を取りこぼす。上は Merck の
+  /// 基準で「自宅で安静にしている健康な犬が 200 bpm はそれ自体が異常」と
+  /// されており、220 まで探す理由がない。探索範囲を無用に広げると、
+  /// 自己相関が高いほうの偽の周期を拾いやすくなる副作用もある(実機で
+  /// 224 bpm を「信頼できる」と誤って出した過去の壊れ方と同じ種類)。
+  /// 子犬は 24 時間最大 274 bpm まで出るが、この範囲は対象外
+  /// (成犬の安静時単発測定が今の用途)。
   static const HeartRateRange dog =
-      HeartRateRange(minBpm: 50, maxBpm: 220);
+      HeartRateRange(minBpm: 40, maxBpm: 200);
 
   /// Narrower, for validating the pipeline on a human subject.
   static const HeartRateRange human =
@@ -194,9 +205,29 @@ class VitalsAnalyzer {
     this.respirationHighHz = 0.7,
     this.minConfidenceGood = 0.30,
     this.minConfidenceFair = 0.15,
+    this.irregularFairPercent = 35.0,
+    this.irregularUnusablePercent = dogIrregularUnusablePercent,
   });
 
   final HeartRateRange range;
+
+  /// 拍の列の乱れが、この値(%, rMAD)を超えたら「算出不可」にする。
+  ///
+  /// 2026-09-13、両側の実測値(通したい側=合成信号 9.2〜26.8%、棄却したい側
+  /// =実機8件 43.9〜57.5%)から 35% と決めた。ただしこれは「拍の列が拍の列と
+  /// 呼べるか」の関門で、犬の生理的な変動は考えていなかった。
+  ///
+  /// 犬には洞性不整脈（呼吸で心拍が周期的に揺れる）が正常所見としてあり、
+  /// 安静時の健康な犬で SDNN が平均の 30〜55% に達するという報告がある
+  /// (2026-09-15、docs/research/犬の心拍数.md の文献調査)。35% を境に
+  /// 即「算出不可」にすると、安静な健康犬の測定を誤って落としかねない。
+  ///
+  /// そこで [irregularFairPercent]（既定 35%）は「参考値へ格下げ」に留め、
+  /// この値（既定 55%、文献にある変動の上限）を超えて初めて「算出不可」に
+  /// する。**55% はまだ実測で裏付けていない、文献からの暫定値。** 手で
+  /// 数えた正解つきの実測が増えたら(次の実験)、35% のときと同じ手順 —
+  /// 同じ実装で測った両側の値から — で必ず見直す。
+  static const double dogIrregularUnusablePercent = 55.0;
 
   /// 8–40 Hz. Chosen empirically on 2026-09-12: of the bands tried
   /// (0.7–12, 1–20, 2–25, 4–30, 5–40, 8–40 Hz) this gave the sharpest
@@ -211,6 +242,12 @@ class VitalsAnalyzer {
 
   final double minConfidenceGood;
   final double minConfidenceFair;
+
+  /// この値を超えたら good を fair へ格下げる(算出不可にはしない)。
+  final double irregularFairPercent;
+
+  /// この値を超えたら算出不可にする。[dogIrregularUnusablePercent] を参照。
+  final double irregularUnusablePercent;
 
   /// Shortest window worth analysing. At 50 bpm the slowest plausible beat is
   /// 1.2 s, and the autocorrelation needs several cycles to be meaningful.
@@ -426,20 +463,22 @@ class VitalsAnalyzer {
       }
     }
 
-    // 「その拍の列は本当に拍の列か」の関門。
+    // 「その拍の列は本当に拍の列か」の関門。しきい値は [irregularFairPercent]
+    // と [irregularUnusablePercent] のドキュメントを見ること。
     //
     // 物差しは rMAD（中央値からのずれの中央値 ÷ 中央値）。標準偏差の変動
     // 係数は使えない。でたらめに並べた拍の変動係数 25% が正しい信号の
     // 33〜50% より小さく、大小が逆転していた。
     //
-    // しきい値 35% は、同じ実装で測った両側の実測値から決めた
+    // 下の関門(既定 35%)は、同じ実装で測った両側の実測値から決めた
     // (2026-09-13、すべて Dart 側の値):
     //
     //   通したい側 — 合成信号 80/100/130/170 bpm → 9.2 / 13.7 / 18.3 / 26.8%
     //   棄却したい側 — 実機の記録8件（いずれも2つの数え方が食い違った）
     //                  → 43.9 / 44.7 / 47.4 / 50.6 / 53.1 / 54.3 / 54.5 / 57.5%
     //
-    // 26.8 と 43.9 の間に隙間がある。35% はその真ん中。
+    // 26.8 と 43.9 の間に隙間がある。35% はその真ん中。上の関門(既定 55%)
+    // の根拠は [dogIrregularUnusablePercent] を参照。まだ実測の裏付けがない。
     //
     // 網羅率（拍の数 × 間隔の中央値 ÷ 測定時間）は関門にしない。実機の
     // 記録が 13〜86% で、合成信号の 62〜79% と重なって分離しないため。
@@ -447,11 +486,17 @@ class VitalsAnalyzer {
     //
     // Python で測った値(合成 80 bpm で 3.8%)を根拠にしようとして失敗した。
     // 実装が違えば値も違う。しきい値は必ず同じ実装の値から決める。
-    if (intervals.length >= 3 &&
-        quality != VitalsQuality.unusable &&
-        _rmadPercent(intervals) > 35) {
-      quality = VitalsQuality.unusable;
-      irregular = true;
+    if (intervals.length >= 3 && quality != VitalsQuality.unusable) {
+      final double rmad = _rmadPercent(intervals);
+      if (rmad > irregularUnusablePercent) {
+        quality = VitalsQuality.unusable;
+        irregular = true;
+      } else if (rmad > irregularFairPercent &&
+          quality == VitalsQuality.good) {
+        // 犬の生理的な変動かもしれない範囲。算出不可にはしないが、
+        // 「信頼できる」とも言わない。
+        quality = VitalsQuality.fair;
+      }
     }
     return VitalsResult(
       sampleRateHz: sampleRateHz,

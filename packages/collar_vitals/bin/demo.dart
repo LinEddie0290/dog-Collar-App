@@ -240,8 +240,13 @@ void runSynthetic() {
   row('でたらめな拍(棄却したい)',
       analyzer.analyze(jittery, sampleRateHz: fsJ));
 
-  print('   ※ しきい値 rMAD 35% は、この表(通したい側 9.2〜26.8%)と');
-  print('      実機の記録8件(棄却したい側 43.9〜57.5%)の隙間から決めた。');
+  print('   ※ 犬プロファイルは2段構え(2026-09-15、文献調査で見直した):');
+  print('      rMAD > ${analyzer.irregularFairPercent.toStringAsFixed(0)}%'
+      ' で参考値へ格下げ、> '
+      '${analyzer.irregularUnusablePercent.toStringAsFixed(0)}% で算出不可。');
+  print('      下の関門(35%)は通したい側(合成 9.2〜26.8%)の実測から。');
+  print('      上の関門(55%)は文献にある犬の安静時変動の上限からの暫定値'
+      '(まだ実測の裏付けなし)。');
 
   // 実機の記録から取った拍間隔のばらつき。しきい値の根拠そのものなので、
   // ここに数値として残す。2026-09-13 の8件はいずれも「波の周期」と
@@ -251,13 +256,28 @@ void runSynthetic() {
   ];
   final double worstGood = <double>[9.2, 13.7, 18.3, 26.8]
       .reduce((double a, double b) => a > b ? a : b);
-  final double bestBad =
-      fieldRmad.reduce((double a, double b) => a < b ? a : b);
+  final double worstBad =
+      fieldRmad.reduce((double a, double b) => a > b ? a : b);
   check(
-      'しきい値 35% が両側の実測値の隙間に入っている',
-      worstGood < 35 && 35 < bestBad,
-      '通したい側の最悪 ${worstGood.toStringAsFixed(1)}% < 35% < '
-      '棄却したい側の最良 ${bestBad.toStringAsFixed(1)}%');
+      '通したい側の最悪 ${worstGood.toStringAsFixed(1)}% は '
+      '格下げ関門 ${analyzer.irregularFairPercent.toStringAsFixed(0)}% を'
+      ' 下回る(good のまま)',
+      worstGood < analyzer.irregularFairPercent);
+  check(
+      '棄却したい側の最悪 ${worstBad.toStringAsFixed(1)}% は '
+      '算出不可の関門 ${analyzer.irregularUnusablePercent.toStringAsFixed(0)}%'
+      ' を上回る(それでも落とす)',
+      worstBad > analyzer.irregularUnusablePercent);
+  // 43.9〜54.5%(実機8件のうち7件)は今回 35〜55% の帯に入り、算出不可では
+  // なく「参考値」に変わる。これが実際の犬で正しい振る舞いかどうかは、
+  // 手で数えた正解つきの実測(次の実験)でしか確かめられない。
+  final int nowFairInsteadOfUnusable = fieldRmad
+      .where((double v) =>
+          v > analyzer.irregularFairPercent &&
+          v <= analyzer.irregularUnusablePercent)
+      .length;
+  print('      → 実機8件のうち $nowFairInsteadOfUnusable 件が'
+      ' 算出不可→参考値 に変わる(要・実測での見直し)。');
 
   print('\n6. 正しい測定を落としていないか（関門を入れたときの見張り）');
   // 2026-09-13 に、足切りを入れて 80/100/130/170 bpm を全部
@@ -276,9 +296,10 @@ void runSynthetic() {
     // しきい値に余裕があることも見る。ぎりぎりだと、少し条件が変わった
     // だけで正しい測定が落ちる。
     check(
-        '${trueBpm.toStringAsFixed(0)} bpm の rMAD がしきい値 35% を下回る',
-        (g.beatIntervalRmadPercent ?? 999) < 35,
-        '${g.beatIntervalRmadPercent?.toStringAsFixed(1)}%');
+        '${trueBpm.toStringAsFixed(0)} bpm の rMAD が格下げ関門'
+        ' ${analyzer.irregularFairPercent.toStringAsFixed(0)}% を下回る'
+        '(good のまま)',
+        (g.beatIntervalRmadPercent ?? 999) < analyzer.irregularFairPercent);
   }
 }
 
