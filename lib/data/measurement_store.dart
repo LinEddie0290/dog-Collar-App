@@ -15,6 +15,7 @@ library;
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:path_provider/path_provider.dart';
 
@@ -46,6 +47,51 @@ class MeasurementStore {
         mode: FileMode.append, flush: true);
   }
 
+  /// 波形画像を置くサブフォルダ名。JSONL 本体とは別ファイルにする理由は
+  /// クラス冒頭のコメント参照(1行を数百バイトに保つため)。
+  static const String _rhythmStripsDirName = 'rhythm_strips';
+
+  Future<Directory> _rhythmStripsDir() async {
+    final Directory docs = await getApplicationDocumentsDirectory();
+    final Directory dir = Directory('${docs.path}/$_rhythmStripsDirName');
+    if (!await dir.exists()) {
+      await dir.create(recursive: true);
+    }
+    return dir;
+  }
+
+  /// 波形画像を保存し、レコードに書く相対パス('rhythm_strips/xxx.png')を
+  /// 返す。
+  Future<String> saveRhythmStripPng(String id, Uint8List bytes) async {
+    final Directory dir = await _rhythmStripsDir();
+    final File f = File('${dir.path}/$id.png');
+    await f.writeAsBytes(bytes, flush: true);
+    return '$_rhythmStripsDirName/$id.png';
+  }
+
+  /// [MeasurementRecord.rhythmStripFile] が指すファイルを開く。無い、
+  /// または消えていれば null(古い記録、または書き出しに失敗した記録)。
+  Future<File?> resolveRhythmStrip(MeasurementRecord r) async {
+    final String? rel = r.rhythmStripFile;
+    if (rel == null) return null;
+    final Directory docs = await getApplicationDocumentsDirectory();
+    final File f = File('${docs.path}/$rel');
+    return await f.exists() ? f : null;
+  }
+
+  /// レコード削除にあわせて画像も消す。JSONL 側だけ消すと、消したはずの
+  /// 記録の画像だけがディスクに残り続ける。
+  Future<void> _deleteRhythmStrip(MeasurementRecord r) async {
+    final File? f = await resolveRhythmStrip(r);
+    if (f == null) return;
+    try {
+      await f.delete();
+    } on Exception {
+      // 消せなくても致命的ではない。JSONL からは消えているので一覧には
+      // 出ない。
+    }
+  }
+
   /// Newest first. A corrupt line is skipped rather than failing the whole
   /// read — one bad write should not cost the user their history.
   Future<List<MeasurementRecord>> loadAll() async {
@@ -68,8 +114,20 @@ class MeasurementStore {
     return out;
   }
 
-  /// Adds or replaces the note and posture on an existing record.
-  Future<void> annotate(String id, {String? note, String? posture}) async {
+  /// Adds or replaces the recorded conditions on an existing record.
+  /// Each parameter left null keeps the record's current value — this is an
+  /// update, not a reset, since the dialog may be reopened to fill in only
+  /// what was missing (e.g. the hand-counted reference added after the fact).
+  Future<void> annotate(
+    String id, {
+    String? note,
+    String? posture,
+    String? position,
+    String? pressure,
+    bool? panting,
+    String? recentActivity,
+    double? referenceBpm,
+  }) async {
     final List<MeasurementRecord> all = await loadAll();
     final File f = await _open();
     final StringBuffer sb = StringBuffer();
@@ -94,7 +152,13 @@ class MeasurementStore {
               imuRateHz: r.imuRateHz,
               note: note ?? r.note,
               posture: posture ?? r.posture,
+              position: position ?? r.position,
+              pressure: pressure ?? r.pressure,
+              panting: panting ?? r.panting,
+              recentActivity: recentActivity ?? r.recentActivity,
+              referenceBpm: referenceBpm ?? r.referenceBpm,
               beatIntervalsMs: r.beatIntervalsMs,
+              rhythmStripFile: r.rhythmStripFile,
             )
           : r;
       sb.writeln(jsonEncode(out.toJson()));
@@ -107,7 +171,10 @@ class MeasurementStore {
     final File f = await _open();
     final StringBuffer sb = StringBuffer();
     for (final MeasurementRecord r in all.reversed) {
-      if (r.id == id) continue;
+      if (r.id == id) {
+        await _deleteRhythmStrip(r);
+        continue;
+      }
       sb.writeln(jsonEncode(r.toJson()));
     }
     await f.writeAsString(sb.toString(), flush: true);
@@ -144,6 +211,12 @@ class MeasurementStore {
       '受信エラー',
       'サンプリング(Hz)',
       '姿勢',
+      'パンティング',
+      '直前1分の活動',
+      '位置',
+      '押し当て',
+      '手動計数(bpm)',
+      '手動計数との差(%)',
       'メモ',
     ].join(','));
     String q(Object? v) {
@@ -173,6 +246,12 @@ class MeasurementStore {
         r.receiveErrors,
         r.imuRateHz ?? '',
         q(r.posture),
+        r.panting == null ? '' : (r.panting! ? '有' : '無'),
+        q(r.recentActivity),
+        q(r.position),
+        q(r.pressure),
+        n(r.referenceBpm, 0),
+        n(r.referenceDeltaPercent),
         q(r.note),
       ].join(','));
     }

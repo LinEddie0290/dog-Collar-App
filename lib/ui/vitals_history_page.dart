@@ -6,6 +6,8 @@ import '../data/measurement_store.dart';
 import '../l10n/app_strings.dart';
 import 'app_colors.dart';
 import 'widgets/beat_chart.dart';
+import 'widgets/rhythm_strip_view.dart';
+import 'widgets/condition_editor_sheet.dart';
 import 'widgets/export_button.dart';
 import 'widgets/sparkline.dart';
 
@@ -289,6 +291,12 @@ class _RecordTileState extends State<_RecordTile> {
                 _M(s.droppedPackets, '${r.gapCount}'),
                 if (r.imuRateHz != null)
                   _M(s.measuredRate, '${r.imuRateHz} Hz'),
+                if (r.referenceBpm != null)
+                  _M(s.referenceBpmLabel,
+                      '${r.referenceBpm!.toStringAsFixed(0)} bpm'),
+                if (r.referenceDeltaPercent != null)
+                  _M(s.referenceDeltaLabel,
+                      '${r.referenceDeltaPercent!.toStringAsFixed(1)} %'),
               ],
             ),
             if (caveat != null)
@@ -297,18 +305,64 @@ class _RecordTileState extends State<_RecordTile> {
                 child: Text(caveat,
                     style: TextStyle(fontSize: 12, height: 1.5, color: color)),
               ),
-            if (r.posture != null || r.note != null)
+            if (r.posture != null ||
+                r.panting != null ||
+                r.recentActivity != null ||
+                r.position != null ||
+                r.pressure != null ||
+                r.note != null)
               Padding(
                 padding: const EdgeInsets.only(top: 12),
                 child: Text(
                     <String>[
                       if (r.posture != null) '${s.postureLabel}: ${r.posture}',
+                      if (r.panting != null)
+                        '${s.pantingLabel}: ${r.panting! ? s.pantingYes : s.pantingNo}',
+                      if (r.recentActivity != null)
+                        '${s.recentActivityLabel}: ${r.recentActivity}',
+                      if (r.position != null)
+                        '${s.positionLabel}: ${r.position}',
+                      if (r.pressure != null)
+                        '${s.pressureLabel}: ${r.pressure}',
                       if (r.note != null) r.note!,
                     ].join('　'),
                     style: const TextStyle(
                         fontSize: 12, color: AppColors.textSecondary)),
               ),
-            if (r.beatIntervalsMs.length >= 3) ...<Widget>[
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton.icon(
+                  onPressed: () async {
+                    final bool saved = await ConditionEditorSheet.show(
+                      context,
+                      record: r,
+                      store: widget.store,
+                    );
+                    if (saved) await widget.onChanged();
+                  },
+                  icon: const Icon(Icons.tune, size: 15),
+                  label: Text(s.editConditionAction,
+                      style: const TextStyle(fontSize: 12)),
+                  style: TextButton.styleFrom(
+                      foregroundColor: AppColors.accent,
+                      padding: EdgeInsets.zero,
+                      visualDensity: VisualDensity.compact),
+                ),
+              ),
+            ),
+            if (r.rhythmStripFile != null) ...<Widget>[
+              const SizedBox(height: 14),
+              Text(s.rhythmStripTitle,
+                  style: const TextStyle(
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.textSecondary)),
+              const SizedBox(height: 4),
+              RhythmStripView(
+                  record: r, store: widget.store, s: s, height: 150),
+            ] else if (r.beatIntervalsMs.length >= 3) ...<Widget>[
               const SizedBox(height: 14),
               Text(s.beatIntervalsTitle,
                   style: const TextStyle(

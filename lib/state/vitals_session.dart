@@ -15,6 +15,7 @@ import 'package:flutter/foundation.dart';
 import '../data/ble_collar_data_source.dart';
 import '../data/measurement_record.dart';
 import '../data/measurement_store.dart';
+import '../ui/rhythm_strip_renderer.dart';
 import 'collar_link.dart';
 
 /// 測定そのものの段階。**接続の状態は含めない。**
@@ -381,6 +382,28 @@ class VitalsSession extends ChangeNotifier {
 
     finalResult = analyzer.analyze(_magnitude, sampleRateHz: fs);
 
+    // 測定全体の波形を1枚の画像にして保存する。JSONL の行には相対パスだけ
+    // 書く(理由は MeasurementStore のコメント)。画像化に失敗しても測定
+    // そのものの保存は続ける — 波形は付加情報であって主役ではない。
+    String? rhythmStripFile;
+    try {
+      final List<int> beatIdx = finalResult!.beatTimesSeconds
+          .map((double t) => (t * fs).round())
+          .toList(growable: false);
+      final Uint8List? png = await renderRhythmStripPng(
+        wave: finalResult!.beatBand,
+        beatIndices: beatIdx,
+        sampleRateHz: fs,
+      );
+      if (png != null) {
+        final String stripId =
+            _startedAt!.toUtc().millisecondsSinceEpoch.toString();
+        rhythmStripFile = await store.saveRhythmStripPng(stripId, png);
+      }
+    } on Exception {
+      // 画像化・保存に失敗しても測定そのものは保存する。
+    }
+
     savedRecord = MeasurementRecord.fromResult(
       startedAt: _startedAt!,
       result: finalResult!,
@@ -390,6 +413,7 @@ class VitalsSession extends ChangeNotifier {
       receiveErrors: link.source?.receiveErrors ?? 0,
       note: note,
       posture: posture,
+      rhythmStripFile: rhythmStripFile,
     );
     try {
       await store.save(savedRecord!);

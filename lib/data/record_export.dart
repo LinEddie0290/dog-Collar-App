@@ -124,6 +124,13 @@ class RecordExport {
     kv('receive_errors', r.receiveErrors);
     kv('sample_rate_hz', r.imuRateHz);
     kv('posture', r.posture);
+    kv('panting', r.panting == null ? null : (r.panting! ? 'yes' : 'no'));
+    kv('recent_activity', r.recentActivity);
+    kv('position', r.position);
+    kv('pressure', r.pressure);
+    // 手で数えた正解。これがあると、この1件がアルゴリズムの検証に使える。
+    kv('reference_bpm', r.referenceBpm?.toStringAsFixed(0));
+    kv('reference_delta_percent', r.referenceDeltaPercent?.toStringAsFixed(1));
     kv('note', r.note);
     b.writeln();
 
@@ -314,6 +321,17 @@ class RecordExport {
       (s.droppedPackets, '${r.gapCount}'),
       if (r.imuRateHz != null) (s.measuredRate, '${r.imuRateHz} Hz'),
       if (r.posture != null) (s.postureLabel, t(r.posture)),
+      if (r.panting != null)
+        (s.pantingLabel, t(r.panting! ? s.pantingYes : s.pantingNo)),
+      if (r.recentActivity != null)
+        (s.recentActivityLabel, t(r.recentActivity)),
+      if (r.position != null) (s.positionLabel, t(r.position)),
+      if (r.pressure != null) (s.pressureLabel, t(r.pressure)),
+      if (r.referenceBpm != null)
+        (s.referenceBpmLabel, '${r.referenceBpm!.toStringAsFixed(0)} bpm'),
+      if (r.referenceDeltaPercent != null)
+        (s.referenceDeltaLabel,
+            '${r.referenceDeltaPercent!.toStringAsFixed(1)} %'),
     ];
 
     return pw.Table(

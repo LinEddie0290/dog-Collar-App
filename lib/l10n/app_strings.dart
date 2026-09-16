@@ -171,6 +171,46 @@ class AppStrings {
     required this.caveatUnusable,
     required this.caveatFair,
     required this.caveatManyGaps,
+    required this.conditionEditorTitle,
+    required this.conditionHealthSection,
+    required this.conditionSensorSection,
+    required this.positionLabel,
+    required this.positionNeck,
+    required this.positionChest,
+    required this.positionThigh,
+    required this.positionOther,
+    required this.pressureLabel,
+    required this.pressureFirm,
+    required this.pressureMedium,
+    required this.pressurePlaced,
+    required this.postureCarried,
+    required this.postureStanding,
+    required this.postureSitting,
+    required this.postureLyingDown,
+    required this.postureOnBack,
+    required this.pantingLabel,
+    required this.pantingYes,
+    required this.pantingNo,
+    required this.pantingUnknown,
+    required this.recentActivityLabel,
+    required this.activityResting,
+    required this.activityWalking,
+    required this.activityActive,
+    required this.activitySleeping,
+    required this.activityUnknown,
+    required this.referenceBpmLabel,
+    required this.referenceBpmHint,
+    required this.referenceDeltaLabel,
+    required this.editConditionAction,
+    required this.conditionNoteHint,
+    required this.unspecifiedLabel,
+    required this.rhythmStripTitle,
+    required this.rhythmStripHint,
+    required this.rhythmStripUnavailable,
+    required this.saveAsPhoto,
+    required this.savedToPhotos,
+    required this.savePhotoFailed,
+    required this.photoPermissionDenied,
   });
 
   final AppLanguage language;
@@ -353,6 +393,46 @@ class AppStrings {
   final String caveatUnusable;
   final String caveatFair;
   final String caveatManyGaps;
+  final String conditionEditorTitle;
+  final String conditionHealthSection;
+  final String conditionSensorSection;
+  final String positionLabel;
+  final String positionNeck;
+  final String positionChest;
+  final String positionThigh;
+  final String positionOther;
+  final String pressureLabel;
+  final String pressureFirm;
+  final String pressureMedium;
+  final String pressurePlaced;
+  final String postureCarried;
+  final String postureStanding;
+  final String postureSitting;
+  final String postureLyingDown;
+  final String postureOnBack;
+  final String pantingLabel;
+  final String pantingYes;
+  final String pantingNo;
+  final String pantingUnknown;
+  final String recentActivityLabel;
+  final String activityResting;
+  final String activityWalking;
+  final String activityActive;
+  final String activitySleeping;
+  final String activityUnknown;
+  final String referenceBpmLabel;
+  final String referenceBpmHint;
+  final String referenceDeltaLabel;
+  final String editConditionAction;
+  final String conditionNoteHint;
+  final String unspecifiedLabel;
+  final String rhythmStripTitle;
+  final String rhythmStripHint;
+  final String rhythmStripUnavailable;
+  final String saveAsPhoto;
+  final String savedToPhotos;
+  final String savePhotoFailed;
+  final String photoPermissionDenied;
 
   /// 履歴画面の「直近N件」表示(言語によって語順が違うので関数にしている)。
   String recentCountLabel(int count) {
@@ -597,6 +677,46 @@ class AppStrings {
     caveatUnusable: '信号が不十分なため、心拍数は算出できませんでした。',
     caveatFair: '信号が弱めです。参考値として扱ってください。',
     caveatManyGaps: '通信の取りこぼしが多いため、拍間隔の指標は信頼できません。',
+    conditionEditorTitle: '測定条件を記録',
+    conditionHealthSection: '犬の状態',
+    conditionSensorSection: 'センサーの当て方（実験用・任意）',
+    positionLabel: '取り付け位置',
+    positionNeck: '首',
+    positionChest: '胸',
+    positionThigh: '太もも',
+    positionOther: 'その他',
+    pressureLabel: '押し当て',
+    pressureFirm: '強め',
+    pressureMedium: '普通',
+    pressurePlaced: '軽く置くだけ',
+    postureCarried: '抱っこ',
+    postureStanding: '立っている',
+    postureSitting: '座っている',
+    postureLyingDown: '伏せている',
+    postureOnBack: '仰向け',
+    pantingLabel: 'パンティング（浅く速い呼吸）',
+    pantingYes: 'している',
+    pantingNo: 'していない',
+    pantingUnknown: 'わからない',
+    recentActivityLabel: '直前1分の活動',
+    activityResting: '安静にしていた',
+    activityWalking: '歩いていた',
+    activityActive: '活発に動いていた・遊んでいた',
+    activitySleeping: '寝ていた',
+    activityUnknown: 'わからない',
+    referenceBpmLabel: '手で数えた心拍（正解）',
+    referenceBpmHint: '例: 15秒数えて×4。空欄でも構いません。',
+    referenceDeltaLabel: 'アプリの値との差',
+    editConditionAction: '測定条件を編集',
+    conditionNoteHint: '気づいたことがあれば（任意）',
+    unspecifiedLabel: '未記入',
+    rhythmStripTitle: '波形と検出した拍',
+    rhythmStripHint: '横にスクロールすると全体を確認できます',
+    rhythmStripUnavailable: 'この測定の波形画像はありません',
+    saveAsPhoto: '写真として保存',
+    savedToPhotos: '写真に保存しました',
+    savePhotoFailed: '保存できませんでした',
+    photoPermissionDenied: '写真への保存が許可されていません。設定アプリで許可してください。',
   );
 
   static const AppStrings _en = AppStrings(
@@ -763,6 +883,46 @@ class AppStrings {
     caveatUnusable: 'The signal was too weak to compute a heart rate.',
     caveatFair: 'The signal was weak. Treat this as approximate.',
     caveatManyGaps: 'Too many packets were dropped, so the interval metrics are unreliable.',
+    conditionEditorTitle: 'Record conditions',
+    conditionHealthSection: 'Dog\'s state',
+    conditionSensorSection: 'Sensor placement (for experiments, optional)',
+    positionLabel: 'Sensor position',
+    positionNeck: 'Neck',
+    positionChest: 'Chest',
+    positionThigh: 'Thigh',
+    positionOther: 'Other',
+    pressureLabel: 'Pressure',
+    pressureFirm: 'Firm',
+    pressureMedium: 'Medium',
+    pressurePlaced: 'Just placed',
+    postureCarried: 'Held',
+    postureStanding: 'Standing',
+    postureSitting: 'Sitting',
+    postureLyingDown: 'Lying down',
+    postureOnBack: 'On its back',
+    pantingLabel: 'Panting',
+    pantingYes: 'Yes',
+    pantingNo: 'No',
+    pantingUnknown: 'Not sure',
+    recentActivityLabel: 'Activity in the last minute',
+    activityResting: 'Resting',
+    activityWalking: 'Walking',
+    activityActive: 'Active / playing',
+    activitySleeping: 'Sleeping',
+    activityUnknown: 'Not sure',
+    referenceBpmLabel: 'Hand-counted heart rate (reference)',
+    referenceBpmHint: 'e.g. count for 15s, x4. Optional.',
+    referenceDeltaLabel: 'Difference from the measured value',
+    editConditionAction: 'Edit conditions',
+    conditionNoteHint: 'Anything else you noticed (optional)',
+    unspecifiedLabel: 'Not recorded',
+    rhythmStripTitle: 'Waveform & detected beats',
+    rhythmStripHint: 'Scroll sideways to see the whole recording',
+    rhythmStripUnavailable: 'No waveform image for this measurement',
+    saveAsPhoto: 'Save as photo',
+    savedToPhotos: 'Saved to Photos',
+    savePhotoFailed: 'Couldn\'t save',
+    photoPermissionDenied: 'Photo library access isn\'t allowed. Enable it in Settings.',
   );
 
   static const AppStrings _zh = AppStrings(
@@ -926,6 +1086,46 @@ class AppStrings {
     caveatUnusable: '信号不足，无法计算心率。',
     caveatFair: '信号较弱，请作为参考值看待。',
     caveatManyGaps: '丢包较多，逐拍间隔指标不可靠。',
+    conditionEditorTitle: '记录测量条件',
+    conditionHealthSection: '狗的状态',
+    conditionSensorSection: '传感器放置方式（用于实验，可选）',
+    positionLabel: '传感器位置',
+    positionNeck: '颈部',
+    positionChest: '胸部',
+    positionThigh: '大腿内侧',
+    positionOther: '其他',
+    pressureLabel: '按压程度',
+    pressureFirm: '用力按压',
+    pressureMedium: '中等力度',
+    pressurePlaced: '轻放',
+    postureCarried: '抱着',
+    postureStanding: '站立',
+    postureSitting: '坐着',
+    postureLyingDown: '趴着',
+    postureOnBack: '仰卧',
+    pantingLabel: '喘气（急促浅呼吸）',
+    pantingYes: '是',
+    pantingNo: '否',
+    pantingUnknown: '不确定',
+    recentActivityLabel: '过去1分钟的活动',
+    activityResting: '安静休息',
+    activityWalking: '走动',
+    activityActive: '活跃玩耍',
+    activitySleeping: '睡觉',
+    activityUnknown: '不确定',
+    referenceBpmLabel: '手动数的心率（参考值）',
+    referenceBpmHint: '例如：数15秒x4。可以留空。',
+    referenceDeltaLabel: '与App测量值的差异',
+    editConditionAction: '编辑测量条件',
+    conditionNoteHint: '其他备注（可选）',
+    unspecifiedLabel: '未记录',
+    rhythmStripTitle: '波形与检测到的心跳',
+    rhythmStripHint: '左右滑动可查看完整记录',
+    rhythmStripUnavailable: '此次测量没有波形图像',
+    saveAsPhoto: '保存为照片',
+    savedToPhotos: '已保存到相册',
+    savePhotoFailed: '保存失败',
+    photoPermissionDenied: '没有相册权限，请在设置中允许。',
   );
 }
 

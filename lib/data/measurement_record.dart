@@ -33,7 +33,13 @@ class MeasurementRecord {
     this.imuRateHz,
     this.note,
     this.posture,
+    this.position,
+    this.pressure,
+    this.panting,
+    this.recentActivity,
+    this.referenceBpm,
     this.beatIntervalsMs = const <double>[],
+    this.rhythmStripFile,
   });
 
   /// Start time in UTC millis, which doubles as a natural sort key and is
@@ -79,9 +85,38 @@ class MeasurementRecord {
   /// Standing, sitting, lying. Posture shifts the baseline.
   final String? posture;
 
+  /// センサーを当てた場所（首/胸/太もも/その他）。次の実験（位置の比較）が
+  /// 成立するために必要。位置を選択式で残さないと、後から比較できない。
+  final String? position;
+
+  /// 押し当ての強さ（強め/普通/軽く置くだけ）。[position] と同じ理由で
+  /// 選択式にしてある。
+  final String? pressure;
+
+  /// パンティング（浅く速い呼吸）をしていたか。null は「わからない」。
+  /// 心拍が高くても、パンティング中であれば驚くことではない。
+  final bool? panting;
+
+  /// 測定直前1分の活動（安静/歩行/活発/睡眠）。心拍は文脈なしでは
+  /// ほとんど意味を持たない。140 bpm は安静時なら要注意、運動直後なら
+  /// 普通。
+  final String? recentActivity;
+
+  /// 手で数えた心拍（例: 15秒 ×4）。アルゴリズムの正解として使う。
+  /// これが無いと、どのセンサー・当て方が良いかを検証できない
+  /// （2026-09-15 の実測8件のうち、正解が同時に取れたものは0件だった）。
+  final double? referenceBpm;
+
   /// Beat-to-beat intervals, kept so a rhythm strip can be redrawn later and
   /// so a future analysis can be re-run without the raw capture.
   final List<double> beatIntervalsMs;
+
+  /// 測定全体(通常60秒)の波形を描いた PNG 画像の、ドキュメントフォルダ
+  /// からの相対パス(`rhythm_strips/<id>.png`)。null は画像化に失敗した、
+  /// またはこの機能より前に保存された記録。実体は [MeasurementStore] が
+  /// 管理する別ファイルで、ここにはパスだけを持つ(JSONL の1行を軽く保つ
+  /// ため — MeasurementStore 冒頭のコメント参照)。
+  final String? rhythmStripFile;
 
   factory MeasurementRecord.fromResult({
     required DateTime startedAt,
@@ -93,6 +128,12 @@ class MeasurementRecord {
     double? bodyTempC,
     String? note,
     String? posture,
+    String? position,
+    String? pressure,
+    bool? panting,
+    String? recentActivity,
+    double? referenceBpm,
+    String? rhythmStripFile,
   }) {
     return MeasurementRecord(
       id: startedAt.toUtc().millisecondsSinceEpoch.toString(),
@@ -113,11 +154,17 @@ class MeasurementRecord {
       imuRateHz: imuRateHz,
       note: note,
       posture: posture,
+      position: position,
+      pressure: pressure,
+      panting: panting,
+      recentActivity: recentActivity,
+      referenceBpm: referenceBpm,
       // Rounded to whole milliseconds: the source resolution is ~2.4 ms at
       // 417 Hz, so extra decimals would be false precision.
       beatIntervalsMs: result.beatIntervalsMs
           .map((double v) => v.roundToDouble())
           .toList(growable: false),
+      rhythmStripFile: rhythmStripFile,
     );
   }
 
@@ -150,11 +197,15 @@ class MeasurementRecord {
     return null;
   }
 
-  /// 拍の列が拍の列と呼べないほど乱れている。しきい値 35% の根拠は
-  /// [VitalsAnalyzer] 側のコメントにある（両側の実測値から決めた）。
+  /// 拍の列が拍の列と呼べないほど乱れている。しきい値の根拠は
+  /// [VitalsAnalyzer.dogIrregularUnusablePercent] 側のコメントにある
+  /// （文献値と実測値の両方から決めた。犬の生理的な変動を許すぶん、
+  /// [VitalsAnalyzer] の関門そのものより緩い）。ここで参照しているのは
+  /// 表示専用の再判定なので、値がずれると「算出不可」の表示が測定時と
+  /// 食い違う。値は必ず [VitalsAnalyzer] 側と揃える。
   bool get isIrregular {
     final double? rmad = beatIntervalRmadPercent;
-    return rmad != null && rmad > 35;
+    return rmad != null && rmad > VitalsAnalyzer.dogIrregularUnusablePercent;
   }
 
   /// 画面に出す品質。
@@ -221,6 +272,15 @@ class MeasurementRecord {
     return ratio < 0.75 || ratio > 1.33;
   }
 
+  /// 手で数えた正解（[referenceBpm]）に対して、アプリの心拍がどれだけ
+  /// ずれているか（%）。プラスはアプリが高め、マイナスは低め。
+  double? get referenceDeltaPercent {
+    final double? bpm = heartRateBpm;
+    final double? ref = referenceBpm;
+    if (bpm == null || ref == null || ref <= 0) return null;
+    return (bpm - ref) / ref * 100;
+  }
+
   Map<String, dynamic> toJson() => <String, dynamic>{
         'schema': 1,
         'id': id,
@@ -241,7 +301,13 @@ class MeasurementRecord {
         'imu_rate_hz': imuRateHz,
         'note': note,
         'posture': posture,
+        'position': position,
+        'pressure': pressure,
+        'panting': panting,
+        'recent_activity': recentActivity,
+        'reference_bpm': referenceBpm,
         'beat_intervals_ms': beatIntervalsMs,
+        'rhythm_strip_file': rhythmStripFile,
       };
 
   factory MeasurementRecord.fromJson(Map<String, dynamic> j) {
@@ -269,12 +335,18 @@ class MeasurementRecord {
           : null,
       note: j['note']?.toString(),
       posture: j['posture']?.toString(),
+      position: j['position']?.toString(),
+      pressure: j['pressure']?.toString(),
+      panting: j['panting'] is bool ? j['panting'] as bool : null,
+      recentActivity: j['recent_activity']?.toString(),
+      referenceBpm: d(j['reference_bpm']),
       beatIntervalsMs: (j['beat_intervals_ms'] is List)
           ? (j['beat_intervals_ms'] as List)
               .whereType<num>()
               .map((num v) => v.toDouble())
               .toList(growable: false)
           : const <double>[],
+      rhythmStripFile: j['rhythm_strip_file']?.toString(),
     );
   }
 }

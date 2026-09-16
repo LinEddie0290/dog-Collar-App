@@ -35,6 +35,11 @@
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
 
+    <!-- ■ 波形画像を「写真」に保存するため(gal パッケージ)。API 29 以下だけ
+         必要(30 以上は MediaStore 経由で実行時の権限なしに書ける)。 -->
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        android:maxSdkVersion="29" />
+
     <!-- ■ BLE が無い端末にはインストールさせない。首輪と通信できないため。 -->
     <uses-feature android:name="android.hardware.bluetooth_le"
         android:required="true" />
