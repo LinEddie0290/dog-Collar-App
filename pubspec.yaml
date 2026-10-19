@@ -42,6 +42,9 @@ dependencies:
   # 心拍・呼吸の算出（純Dart、FFT不要）。2026-09-12 の実測で検証済み。
   collar_vitals:
     path: packages/collar_vitals
+  # T24：首輪の IMU 用 CNN の推理（純 Dart）。重みは collar-pipeline の scripts/export_cnn.py。
+  collar_imu_cnn:
+    path: packages/collar_imu_cnn
   amap_map: ^1.0.15
   # amap_map の土台。LatLng / AMapApiKey などを直接 import しているので、
   # 推移的依存に頼らず明示的に書いておく(depend_on_referenced_packages 対策)。
@@ -89,6 +92,11 @@ flutter:
     # フォントを使えないので TTF の同梱が必要。ファイルが無くても書き出しは
     # 動く(英字ラベルにフォールバックする)。置き方は assets/fonts/README.txt。
     - assets/fonts/
+    # T23 デモ：パイプラインの 14 日分の JSON(collar-pipeline の scripts/demo.py --app-repo で入れる)
+    - assets/demo/dog_sim01/
+    - assets/demo/dog_sim01/summary/
+    # T24：CNN の重みと確かめ用の窓（設定 → 推理速度）
+    - assets/models/
 
   # To add assets to your application, add an assets section, like this:
   # assets:
