@@ -103,6 +103,13 @@ packages:
       relative: true
     source: path
     version: "0.1.0"
+  collar_imu_cnn:
+    dependency: "direct main"
+    description:
+      path: "packages/collar_imu_cnn"
+      relative: true
+    source: path
+    version: "0.1.0"
   collar_vitals:
     dependency: "direct main"
     description:

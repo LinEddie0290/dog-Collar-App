@@ -117,13 +117,13 @@ void main() {
     ));
     await tester.pumpAndSettle();
     expect(find.textContaining('第 3 天'), findsOneWidget);
-    expect(find.textContaining('挠・舔比平时多很多'), findsOneWidget);
+    expect(find.textContaining('挠和舔比平时多很多'), findsOneWidget);
     expect(find.text(t.notDiagnosis), findsOneWidget);
 
     await tester.tap(find.byKey(const ValueKey<String>('prev-day')));
     await tester.pumpAndSettle();
     expect(find.textContaining('第 2 天'), findsOneWidget);
-    expect(find.textContaining('挠・舔比平时多很多'), findsNothing);
+    expect(find.textContaining('挠和舔比平时多很多'), findsNothing);
     expect(find.text(t.skinOk), findsOneWidget);
 
     await tester.tap(find.byKey(const ValueKey<String>('prev-day')));

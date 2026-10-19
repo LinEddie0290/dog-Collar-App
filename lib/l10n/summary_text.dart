@@ -31,7 +31,7 @@ class SummaryTextZh {
       : '数据收集中，还要 $days 天开始和平时比较';
   final String noData = '这天的数据不够（项圈戴的时间太短），不做比较';
   final String unreadable = '这天的数据读不出来';
-  final String skinOk = '挠・舔 没有特别的变化';
+  final String skinOk = '挠和舔没有特别的变化';
   final String notDiagnosis = '这不是诊断。如果担心，请问兽医。';
   final String trendTitle = '最近 14 天';
   final String trendExercise = '运动（分钟）';
@@ -59,7 +59,7 @@ class SummaryTextZh {
           if (hr != null) '安静时心率 ${hr.round()} 次/分',
           if (rr != null) '呼吸 ${rr.round()} 次/分',
         ];
-        return parts.isEmpty ? '今天没有测到心率・呼吸' : parts.join('，');
+        return parts.isEmpty ? '今天没有测到心率和呼吸' : parts.join('，');
       default:
         return item.textKey;
     }
@@ -75,8 +75,8 @@ class SummaryTextZh {
         return '昨晚睡得比平时少${q.isEmpty ? '' : '（$q）'}';
       case 'skin.alert.more':
         final num? n = item.number('count');
-        final String c = n == null ? '' : '，挠・舔了 ${n.round()} 次';
-        return ratio == null ? '今天挠・舔比平时多很多$c' : '今天挠・舔比平时多很多（平时的 $ratio 倍$c）';
+        final String c = n == null ? '' : '，挠和舔了 ${n.round()} 次';
+        return ratio == null ? '今天挠和舔比平时多很多$c' : '今天挠和舔比平时多很多（平时的 $ratio 倍$c）';
       case 'physio.alert.up':
         final String? metric = item.text('metric');
         if (metric == 'sleep_rr_median') {
