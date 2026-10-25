@@ -244,6 +244,14 @@ class BleCollarDataSource implements CollarDataSource {
   final StreamController<PetImuSample> _imu =
       StreamController<PetImuSample>.broadcast();
 
+  /// 全フレーム（組み立て直したバイト列）。T21：生データの保存用。
+  ///
+  /// [frames] は画面用に 250 ms ごとのまとめで、付くバイト列も最後の 1 フレーム
+  /// だけなので、生データの保存には使えない。こちらは届いた順にすべて流す
+  /// （IMU 2 つ・温度・GPS・コマンドの応答）。
+  final StreamController<CapturedFrame> _captured =
+      StreamController<CapturedFrame>.broadcast();
+
   // One reassembler per characteristic, as the manual requires: Data and
   // Status carry independent fragment streams and must never be merged.
   final PetReassembler _dataRx = PetReassembler();
@@ -294,6 +302,15 @@ class BleCollarDataSource implements CollarDataSource {
 
   /// Full-rate IMU samples from [preferredImu]. See [_imu].
   Stream<PetImuSample> get imuSamples => _imu.stream;
+
+  /// 届いた全フレーム。See [_captured].
+  Stream<CapturedFrame> get capturedFrames => _captured.stream;
+
+  void _capture(String channel, PetReassembler rx) {
+    final Uint8List? bytes = rx.lastFrame;
+    if (bytes == null || _captured.isClosed || !_captured.hasListener) return;
+    _captured.add(CapturedFrame(DateTime.now().millisecondsSinceEpoch, channel, bytes));
+  }
 
   /// The IMU rate the device actually accepted, or null before START.
   int? get activeImuRateHz => _activeImuRateHz;
@@ -628,6 +645,7 @@ class BleCollarDataSource implements CollarDataSource {
     try {
       final PetFrame? frame = _statusRx.feed(value);
       if (frame == null) return;
+      _capture('status', _statusRx);
       final PetResponse resp = decodeResponse(frame);
       final Completer<PetResponse>? pending = _pending;
       if (pending != null &&
@@ -644,6 +662,8 @@ class BleCollarDataSource implements CollarDataSource {
     try {
       final PetFrame? frame = _dataRx.feed(value);
       if (frame == null) return;
+      // 読み解く前に残す。読み解きに失敗したフレームも証拠として残るように。
+      _capture('data', _dataRx);
       final PetSample sample = decodePetSample(frame);
 
       if (sample is PetGpsSample) {
@@ -661,8 +681,8 @@ class BleCollarDataSource implements CollarDataSource {
         }
       }
 
-      // Archive every frame, throttle only what the UI sees. The bytes go with
-      // it, so a decoder bug can be diagnosed from the capture later.
+      // 画面用のまとめ（[frames]）に付ける最後のバイト列。全フレームの保存は
+      // [capturedFrames] → FrameArchive が行う（T21）。
       _lastBytes = frame.payload;
     } on PetProtocolException {
       receiveErrors++;
@@ -763,6 +783,7 @@ class BleCollarDataSource implements CollarDataSource {
     _emit(ConnStatus.disconnected);
     if (!_frames.isClosed) await _frames.close();
     if (!_imu.isClosed) await _imu.close();
+    if (!_captured.isClosed) await _captured.close();
     if (!_status.isClosed) await _status.close();
   }
 

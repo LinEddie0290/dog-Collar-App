@@ -12,4 +12,5 @@
 library;
 
 export 'src/biquad.dart';
+export 'src/sample_rate.dart';
 export 'src/vitals_analyzer.dart';

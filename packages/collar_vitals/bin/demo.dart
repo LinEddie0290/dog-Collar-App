@@ -15,10 +15,10 @@
 ///
 ///   2. **A real capture, if you pass one.** Give it the path to an
 ///      `onboard_imu.csv` produced by `./scripts/pet view` and it will run the
-///      real thing. The 2026-09-12 chest recordings should come out at
-///      78 bpm — that figure was established independently in SciPy with a
-///      Hilbert envelope and template matching, so it is a genuine
-///      cross-check, not this code agreeing with itself.
+///      real thing. The 2026-09-12 chest recordings are compared, per
+///      capture, with collar-pipeline (T09), which computes the same thing in
+///      Python with the sample rate taken as count ÷ time (417 Hz). The old
+///      single 78 bpm SciPy figure was itself derived at 401 Hz (T22).
 ///
 /// ```sh
 /// dart run bin/demo.dart
@@ -303,8 +303,53 @@ void runSynthetic() {
   }
 }
 
+void runSampleRate() {
+  print('\n7. 周波数の出し方（T22：中央値 → 数÷時間）');
+  // きれいな時刻：2,500 µs おき → 400 Hz
+  final List<int> clean = List<int>.generate(4000, (int i) => i * 2500);
+  final double? f1 = estimateSampleRateHz(clean);
+  check('きれいな時刻は 400 Hz', f1 != null && (f1 - 400).abs() < 0.01,
+      '${f1?.toStringAsFixed(2)}');
+
+  // 9/12 のように偏ってばらつく時刻：6割は約 2,500 µs、4割は約 2,245 µs
+  // → 平均 2,398 µs（417 Hz）、中央値は約 2,500 µs（400 Hz 前後）
+  final math.Random r = math.Random(12);
+  final List<int> skew = <int>[0];
+  for (int i = 1; i < 25000; i++) {
+    final int base = (i % 5 < 3) ? 2500 : 2245;
+    skew.add(skew.last + base + r.nextInt(9) - 4);
+  }
+  final double? f2 = estimateSampleRateHz(skew);
+  final double? f2old = medianSampleRateHz(skew);
+  check('偏ってばらつく時刻は 417 Hz（中央値なら約 400 Hz）',
+      f2 != null && (f2 - 417.0).abs() < 1.0 && f2old != null && f2old < 405,
+      '新 ${f2?.toStringAsFixed(1)} Hz・旧 ${f2old?.toStringAsFixed(1)} Hz');
+
+  // パケット落ち：400 Hz の途中に 50 ms の抜けが3回 → 400 Hz のまま
+  final List<int> drop = <int>[0];
+  for (int i = 1; i < 8000; i++) {
+    drop.add(drop.last + ((i == 2000 || i == 4000 || i == 6000) ? 50000 : 2500));
+  }
+  final double? f3 = estimateSampleRateHz(drop);
+  check('パケット落ちがあっても 400 Hz', f3 != null && (f3 - 400).abs() < 0.01,
+      '${f3?.toStringAsFixed(2)}');
+
+  // 少なすぎる：20 個 → null
+  check('20 個しかないときは null',
+      estimateSampleRateHz(List<int>.generate(20, (int i) => i * 2500)) == null);
+}
+
+/// 9/12 の胸の採取を collar-pipeline（T09、数÷時間＝417 Hz）で出した心拍。
+const Map<String, double> _t09Bpm = <String, double>{
+  'chest-breath': 88.5,
+  'chest-dual-seated-2': 77.9,
+  'chest-dual-seated-breath': 81.1,
+  'chest-dual-swapped': 81.4,
+  'chest-hold': 83.3,
+};
+
 void runRealCapture(String path) {
-  print('\n4. 実測データ — ${path.split('/').last}');
+  print('\n8. 実測データ — ${path.split('/').last}');
   final File f = File(path);
   if (!f.existsSync()) {
     print('  … ファイルが見つかりません: $path');
@@ -344,17 +389,13 @@ void runRealCapture(String path) {
     return;
   }
 
-  // The device clock is monotonic microseconds; the median step is the true
-  // sample interval (a mean would be skewed by any dropped record).
-  final List<double> steps = <double>[];
-  for (int i = 1; i < us.length; i++) {
-    final double d = us[i] - us[i - 1];
-    if (d > 0 && d < 1e6) steps.add(d);
-  }
-  steps.sort();
-  final double fs = 1e6 / steps[steps.length ~/ 2];
+  // 周波数は「数÷時間」（大きな抜けは除く）。中央値は時刻のばらつきが偏ると
+  // 低く出て、心拍が約4%低くなっていた（T22、D-032）。比べるため両方出す。
+  final double fs = estimateSampleRateHz(us)!;
+  final double fsOld = medianSampleRateHz(us)!;
 
-  print('  標本 ${mag.length} 点、実効 ${fs.toStringAsFixed(1)} Hz、'
+  print('  標本 ${mag.length} 点、実効 ${fs.toStringAsFixed(1)} Hz'
+      '（旧い中央値なら ${fsOld.toStringAsFixed(1)} Hz）、'
       '${(mag.length / fs).toStringAsFixed(1)} 秒');
 
   // Human subject, so use the narrower range for this cross-check.
@@ -366,9 +407,19 @@ void runRealCapture(String path) {
         '   SDNN ${r.sdnnMs?.toStringAsFixed(1) ?? "—"} ms'
         '   RMSSD ${r.rmssdMs?.toStringAsFixed(1) ?? "—"} ms');
   }
-  check('SciPy で確立した 78 bpm と ±4 bpm 以内で一致',
-      r.heartRateBpm != null && (r.heartRateBpm! - 78.0).abs() <= 4.0,
-      '得られた値 ${r.heartRateBpm?.toStringAsFixed(1)}');
+  // 以前は全部の採取を「SciPy の 78 bpm ±4」と比べていたが、その 78 も
+  // 中央値の周波数（401 Hz）で出した値で、約4%低い可能性がある（T09・T22）。
+  // いまは採取ごとに collar-pipeline（T09、417 Hz）の値と ±0.5 bpm で比べる。
+  final List<String> parts = path.split('/');
+  final String capture = parts.length >= 4 ? parts[parts.length - 4] : '';
+  final double? ref = _t09Bpm[capture];
+  if (ref == null) {
+    print('  （$capture は T09 の比べる値がないので、心拍の一致は見ない）');
+  } else {
+    check('collar-pipeline（T09）の $ref bpm と ±0.5 bpm 以内で一致',
+        r.heartRateBpm != null && (r.heartRateBpm! - ref).abs() <= 0.5,
+        '得られた値 ${r.heartRateBpm?.toStringAsFixed(1)}');
+  }
   check('品質が good と判定される', r.quality == VitalsQuality.good,
       r.quality.name);
 }
@@ -376,6 +427,7 @@ void runRealCapture(String path) {
 void main(List<String> args) {
   print('collar_vitals self-test\n');
   runSynthetic();
+  runSampleRate();
   for (final String p in args) {
     runRealCapture(p);
   }

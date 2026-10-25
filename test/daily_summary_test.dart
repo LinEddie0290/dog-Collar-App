@@ -1,6 +1,5 @@
 // T23「每天」画面のテスト(設計メモ T23 8章)。
 import 'dart:convert';
-import 'dart:typed_data';
 
 import 'package:collar_app/data/daily_summary.dart';
 import 'package:collar_app/l10n/summary_text.dart';
@@ -30,7 +29,7 @@ Map<String, dynamic> _cat(String id, String status, {Map<String, dynamic>? alert
       'status': status,
       'alert': alert,
       'daily': daily,
-      if (wait != null) 'days_until_compare': wait,
+      'days_until_compare': ?wait,
     };
 
 String _day(String date, {String status = 'ok', bool skinAlert = false, int? wait}) => jsonEncode(<String, dynamic>{
