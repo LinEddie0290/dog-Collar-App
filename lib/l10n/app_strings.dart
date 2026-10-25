@@ -471,6 +471,19 @@ class AppStrings {
     }
   }
 
+  /// 地図の座標をコピーしたとき（T19）。出すのは首輪の生の値（WGS84）なので、
+  /// 高德地図（GCJ-02）に貼るとずれることを一緒に伝える（Q16）。
+  String get coordsCopied {
+    switch (language) {
+      case AppLanguage.ja:
+        return '座標（WGS84）をコピーしました。高德地図に貼ると約 500 m ずれることがあります。';
+      case AppLanguage.en:
+        return 'Coordinates (WGS84) copied. Amap may show them about 500 m off.';
+      case AppLanguage.zh:
+        return '已复制坐标（WGS84）。贴到高德地图可能偏差约 500 米。';
+    }
+  }
+
   /// "N分前" 表示。1分未満は justNow を使う想定(この関数は呼ばない)。
   String minutesAgoLabel(int minutes) {
     switch (language) {
