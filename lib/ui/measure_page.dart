@@ -11,9 +11,11 @@ import 'app_colors.dart';
 import 'devices_page.dart';
 import 'vitals_history_page.dart';
 import 'widgets/beat_chart.dart';
+import 'widgets/condition_editor_sheet.dart';
 import 'widgets/export_button.dart';
 import 'widgets/raw_export_button.dart';
 import 'widgets/live_wave_chart.dart';
+import 'widgets/rhythm_strip_view.dart';
 
 /// 心拍測定の画面。
 ///
@@ -357,6 +359,13 @@ class _LiveCard extends StatelessWidget {
             ),
           // 2つの数え方が食い違ったら、その場で言う。あとで履歴を見て
           // 「あの数字は何だったのか」と考えることになるのを避ける。
+          if (r != null && r.rateFromBeats)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text(s.rateFromBeatsNote,
+                  style: const TextStyle(
+                      fontSize: 11.5, color: AppColors.textSecondary)),
+            ),
           if (r != null && r.rateDisagrees)
             Padding(
               padding: const EdgeInsets.only(top: 10),
@@ -474,14 +483,27 @@ class _ResultCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 16),
-          Text(s.beatIntervalsTitle,
+          Text(
+              record?.rhythmStripFile != null
+                  ? s.rhythmStripTitle
+                  : s.beatIntervalsTitle,
               style: const TextStyle(
                   fontSize: 12.5,
                   fontWeight: FontWeight.w700,
                   color: AppColors.textSecondary)),
           const SizedBox(height: 6),
-          BeatIntervalChart(
-              intervalsMs: result.beatIntervalsMs, emptyLabel: s.noDataYet),
+          if (record?.rhythmStripFile != null && session != null)
+            RhythmStripView(record: record!, store: session!.store, s: s)
+          else
+            BeatIntervalChart(
+                intervalsMs: result.beatIntervalsMs, emptyLabel: s.noDataYet),
+          if (result.rateFromBeats)
+            Padding(
+              padding: const EdgeInsets.only(top: 10),
+              child: Text(s.rateFromBeatsNote,
+                  style: const TextStyle(
+                      fontSize: 12, color: AppColors.textSecondary)),
+            ),
           if (result.rateDisagrees)
             Padding(
               padding: const EdgeInsets.only(top: 12),
@@ -491,6 +513,10 @@ class _ResultCard extends StatelessWidget {
             ),
           if (record != null) ...<Widget>[
             const Divider(height: 20, color: AppColors.divider),
+            if (session != null)
+              _ConditionSummaryRow(
+                  record: record!, s: s, store: session!.store),
+            const SizedBox(height: 4),
             Text(s.exportThisRecord,
                 style: const TextStyle(
                     fontSize: 11.5,
@@ -644,6 +670,81 @@ class _FooterLink extends StatelessWidget {
       );
 }
 
+class _ConditionSummaryRow extends StatefulWidget {
+  const _ConditionSummaryRow(
+      {required this.record, required this.s, required this.store});
+  final MeasurementRecord record;
+  final AppStrings s;
+  final MeasurementStore store;
+
+  @override
+  State<_ConditionSummaryRow> createState() => _ConditionSummaryRowState();
+}
+
+class _ConditionSummaryRowState extends State<_ConditionSummaryRow> {
+  // annotate() はファイルを書き換えるだけで record を返さないので、保存した
+  // 内容をここに持って表示に使う。測定直後の画面をまるごと作り直させない
+  // ための工夫。
+  late MeasurementRecord _record = widget.record;
+
+  Future<void> _open() async {
+    final bool saved = await ConditionEditorSheet.show(
+      context,
+      record: _record,
+      store: widget.store,
+    );
+    if (!saved || !mounted) return;
+    final List<MeasurementRecord> all = await widget.store.loadAll();
+    MeasurementRecord? updated;
+    for (final MeasurementRecord r in all) {
+      if (r.id == _record.id) {
+        updated = r;
+        break;
+      }
+    }
+    if (updated != null && mounted) setState(() => _record = updated!);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final AppStrings s = widget.s;
+    final MeasurementRecord r = _record;
+    final List<String> parts = <String>[
+      if (r.posture != null) r.posture!,
+      if (r.panting != null) (r.panting! ? s.pantingLabel : ''),
+      if (r.recentActivity != null) r.recentActivity!,
+      if (r.referenceBpm != null)
+        '${s.referenceBpmLabel} ${r.referenceBpm!.toStringAsFixed(0)} bpm',
+    ].where((String v) => v.isNotEmpty).toList(growable: false);
+
+    return InkWell(
+      onTap: _open,
+      borderRadius: BorderRadius.circular(10),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 6),
+        child: Row(
+          children: <Widget>[
+            const Icon(Icons.tune, size: 15, color: AppColors.textFaint),
+            const SizedBox(width: 6),
+            Expanded(
+              child: Text(
+                parts.isEmpty ? s.editConditionAction : parts.join('　'),
+                style: TextStyle(
+                    fontSize: 12,
+                    color: parts.isEmpty
+                        ? AppColors.accent
+                        : AppColors.textSecondary),
+              ),
+            ),
+            const Icon(Icons.chevron_right,
+                size: 15, color: AppColors.textFaint),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _Metric extends StatelessWidget {
   const _Metric(this.label, this.value);
   final String label;
@@ -688,6 +789,8 @@ class _Card extends StatelessWidget {
 String? _caveatText(AppStrings s, MeasurementRecord? r) =>
     switch (r?.caveatCode) {
       'unusable' => s.caveatUnusable,
+      'irregular' => s.caveatIrregular,
+      'intermittent' => s.caveatIntermittent,
       'rate_disagrees' => s.caveatRateDisagrees,
       'fair' => s.caveatFair,
       'gaps' => s.caveatManyGaps,

@@ -44,6 +44,10 @@
 	<string>地図にワンちゃんと自分の位置を表示するために、位置情報を使用します。</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
 	<string>ワンちゃんが安全エリアから出たときにお知らせするため、バックグラウンドでも位置情報を使用します。</string>
+	<!-- 波形画像を「写真」に保存するため(gal パッケージ)。アルバムを指定せず
+	     追加のみなので Add-only の説明文で足りる。 -->
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>測定の波形画像を写真に保存するために使用します。</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

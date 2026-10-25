@@ -1,5 +1,6 @@
 import 'package:collar_geo/collar_geo.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../l10n/app_strings.dart';
 import '../state/collar_controller.dart';
@@ -66,15 +67,16 @@ class MapPage extends StatelessWidget {
                 ),
               ),
             ),
-            if (locationController.latestAccuracyM != null)
-              Positioned(
-                right: 16,
-                bottom: 16,
-                child: _AccuracyChip(
-                  meters: locationController.latestAccuracyM!,
-                  strings: strings,
-                ),
+            Positioned(
+              right: 16,
+              bottom: 16,
+              child: PositionChip(
+                position: position,
+                accuracyM: locationController.latestAccuracyM,
+                stale: locationController.isOffline,
+                strings: strings,
               ),
+            ),
           ],
         );
       },
@@ -230,24 +232,68 @@ class _OfflineBanner extends StatelessWidget {
   }
 }
 
-class _AccuracyChip extends StatelessWidget {
-  const _AccuracyChip({required this.meters, required this.strings});
+/// 緯度・経度の表示（T19）。小数 5 桁 ≈ 1 m。GPS の誤差は数 m 以上なので、それ以上は出さない。
+String formatLatLng(GeoPoint p) => '${p.lat.toStringAsFixed(5)}, ${p.lng.toStringAsFixed(5)}';
 
-  final int meters;
+/// 右下のチップ：精度（あれば）と、その下に緯度・経度（T19）。
+///
+/// 数字は幅のそろう字体（等幅数字）にして、更新のたびにチップががたつかないようにする。
+/// 位置が古い（オフライン）ときは数字を薄くする。「何分前」は上の帯に出るので繰り返さない。
+/// 長押しで「緯度, 経度」をコピーする（WGS84。高德地図に貼るとずれることを知らせる、Q16）。
+class PositionChip extends StatelessWidget {
+  const PositionChip({
+    super.key,
+    required this.position,
+    required this.accuracyM,
+    required this.stale,
+    required this.strings,
+  });
+
+  final GeoPoint position;
+  final int? accuracyM;
+  final bool stale;
   final AppStrings strings;
+
+  static const Key coordsKey = ValueKey<String>('position-chip-coords');
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        border: Border.all(color: AppColors.border),
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Text(
-        strings.gpsAccuracyLabel(meters),
-        style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.textSecondary),
+    const List<FontFeature> tabular = <FontFeature>[FontFeature.tabularFigures()];
+    return GestureDetector(
+      onLongPress: () async {
+        await Clipboard.setData(ClipboardData(text: formatLatLng(position)));
+        if (!context.mounted) return;
+        ScaffoldMessenger.maybeOf(context)
+            ?.showSnackBar(SnackBar(content: Text(strings.coordsCopied)));
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          border: Border.all(color: AppColors.border),
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: <Widget>[
+            if (accuracyM != null)
+              Text(
+                strings.gpsAccuracyLabel(accuracyM!),
+                style: const TextStyle(
+                    fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.textSecondary),
+              ),
+            Text(
+              formatLatLng(position),
+              key: coordsKey,
+              style: TextStyle(
+                fontSize: 11,
+                fontFeatures: tabular,
+                color: stale ? AppColors.textFaint : AppColors.textSecondary,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

@@ -6,6 +6,7 @@ import '../l10n/app_strings.dart';
 import '../state/collar_controller.dart';
 import '../state/locale_controller.dart';
 import 'app_colors.dart';
+import 'cnn_bench_page.dart';
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({
@@ -235,6 +236,33 @@ class _SettingsPageState extends State<SettingsPage> {
                           ),
                         ),
                       ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 20),
+              // T24：開発用。CNN の推理速度を測る（文言は中国語だけ、T16 で整理）。
+              const _SectionLabel('开发'),
+              const SizedBox(height: 8),
+              _SectionCard(
+                children: <Widget>[
+                  _SettingsRow(
+                    last: true,
+                    child: InkWell(
+                      key: const ValueKey<String>('open-cnn-bench'),
+                      onTap: () => Navigator.of(context).push(
+                        MaterialPageRoute<void>(builder: (BuildContext _) => const CnnBenchPage()),
+                      ),
+                      child: const Row(
+                        children: <Widget>[
+                          Icon(Icons.speed, size: 16, color: AppColors.textSecondary),
+                          SizedBox(width: 10),
+                          Expanded(
+                            child: Text('推理速度（T24）', style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700)),
+                          ),
+                          Icon(Icons.chevron_right, size: 18, color: AppColors.textFaint),
+                        ],
+                      ),
                     ),
                   ),
                 ],

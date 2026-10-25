@@ -1,0 +1,145 @@
+{
+  "schema": "collar.history/0.1",
+  "days": [
+    {
+      "date": "2026-10-01",
+      "valid_day": true,
+      "active_min": 56,
+      "sleep_min": 385,
+      "sleep_quality": 0.89,
+      "itch_count": 9,
+      "rest_hr": 90,
+      "rest_rr": 19
+    },
+    {
+      "date": "2026-10-02",
+      "valid_day": true,
+      "active_min": 58,
+      "sleep_min": 519,
+      "sleep_quality": 0.88,
+      "itch_count": 11,
+      "rest_hr": 90,
+      "rest_rr": 19
+    },
+    {
+      "date": "2026-10-03",
+      "valid_day": true,
+      "active_min": 58,
+      "sleep_min": 513,
+      "sleep_quality": 0.9,
+      "itch_count": 9,
+      "rest_hr": 90,
+      "rest_rr": 19
+    },
+    {
+      "date": "2026-10-04",
+      "valid_day": true,
+      "active_min": 63,
+      "sleep_min": 554,
+      "sleep_quality": 0.87,
+      "itch_count": 11,
+      "rest_hr": 90,
+      "rest_rr": 19
+    },
+    {
+      "date": "2026-10-05",
+      "valid_day": true,
+      "active_min": 64,
+      "sleep_min": 558,
+      "sleep_quality": 0.9,
+      "itch_count": 9,
+      "rest_hr": 90,
+      "rest_rr": 19
+    },
+    {
+      "date": "2026-10-06",
+      "valid_day": true,
+      "active_min": 60,
+      "sleep_min": 535,
+      "sleep_quality": 0.94,
+      "itch_count": 11,
+      "rest_hr": 90,
+      "rest_rr": 19
+    },
+    {
+      "date": "2026-10-07",
+      "valid_day": true,
+      "active_min": 55,
+      "sleep_min": 610,
+      "sleep_quality": 0.95,
+      "itch_count": 9,
+      "rest_hr": 90,
+      "rest_rr": 19
+    },
+    {
+      "date": "2026-10-08",
+      "valid_day": true,
+      "active_min": 57,
+      "sleep_min": 515,
+      "sleep_quality": 0.86,
+      "itch_count": 10,
+      "rest_hr": 90,
+      "rest_rr": 19
+    },
+    {
+      "date": "2026-10-09",
+      "valid_day": true,
+      "active_min": 59,
+      "sleep_min": 517,
+      "sleep_quality": 0.97,
+      "itch_count": 10,
+      "rest_hr": 90,
+      "rest_rr": 19
+    },
+    {
+      "date": "2026-10-10",
+      "valid_day": true,
+      "active_min": 59,
+      "sleep_min": 539,
+      "sleep_quality": 0.94,
+      "itch_count": 10,
+      "rest_hr": 90,
+      "rest_rr": 19
+    },
+    {
+      "date": "2026-10-11",
+      "valid_day": true,
+      "active_min": 56,
+      "sleep_min": 530,
+      "sleep_quality": 0.97,
+      "itch_count": 22,
+      "rest_hr": 90,
+      "rest_rr": 19
+    },
+    {
+      "date": "2026-10-12",
+      "valid_day": true,
+      "active_min": 30,
+      "sleep_min": 539,
+      "sleep_quality": 0.91,
+      "itch_count": 9,
+      "rest_hr": 90,
+      "rest_rr": 19
+    },
+    {
+      "date": "2026-10-13",
+      "valid_day": true,
+      "active_min": 63,
+      "sleep_min": 523,
+      "sleep_quality": 0.93,
+      "itch_count": 9,
+      "rest_hr": 108,
+      "rest_rr": 19
+    },
+    {
+      "date": "2026-10-14",
+      "valid_day": true,
+      "active_min": 59,
+      "sleep_min": 524,
+      "sleep_quality": 0.92,
+      "itch_count": 9,
+      "rest_hr": 90,
+      "rest_rr": 19
+    }
+  ]
+}

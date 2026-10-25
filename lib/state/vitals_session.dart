@@ -15,6 +15,7 @@ import 'package:flutter/foundation.dart';
 import '../data/ble_collar_data_source.dart';
 import '../data/measurement_record.dart';
 import '../data/measurement_store.dart';
+import '../ui/rhythm_strip_renderer.dart';
 import 'collar_link.dart';
 
 /// 測定そのものの段階。**接続の状態は含めない。**
@@ -148,18 +149,21 @@ class VitalsSession extends ChangeNotifier {
           .clamp(0.0, 1.0);
 
   /// The sampling rate actually observed, or null before enough samples.
+  ///
+  /// 「数÷時間」（大きな抜けは除く）で出す。以前の「間隔の中央値」は、
+  /// 首輪の時刻のばらつきが偏ると低く出て、心拍が約4%低くなっていた
+  /// （T22、D-032。計算は collar_vitals の [estimateSampleRateHz]）。
+  /// 1サンプルごとに何度も呼ばれるので、サンプル数が変わったときだけ計算する。
   double? get effectiveSampleRateHz {
-    if (_deviceUs.length < 32) return null;
-    final List<int> steps = <int>[];
-    for (int i = 1; i < _deviceUs.length; i++) {
-      final int d = _deviceUs[i] - _deviceUs[i - 1];
-      if (d > 0 && d < 1000000) steps.add(d);
+    if (_fsCacheLength != _deviceUs.length) {
+      _fsCache = estimateSampleRateHz(_deviceUs);
+      _fsCacheLength = _deviceUs.length;
     }
-    if (steps.isEmpty) return null;
-    steps.sort();
-    final int median = steps[steps.length ~/ 2];
-    return median <= 0 ? null : 1000000 / median;
+    return _fsCache;
   }
+
+  double? _fsCache;
+  int _fsCacheLength = -1;
 
   /// 測定を開始する。未接続なら接続も行う。
   ///
@@ -206,6 +210,12 @@ class VitalsSession extends ChangeNotifier {
     }
 
     _startedAt = DateTime.now();
+    // 生データ（T21）に測定の始まりの印を書く。結果の started_at と時刻で結びつく。
+    link.archive?.event('measure_start', <String, Object?>{
+      'started_at_ms': _startedAt!.millisecondsSinceEpoch,
+      'trigger': 'button', // 自動測定（安静 30 秒）を足したら 'auto'（D-045）
+      'imu_rate_hz': link.activeImuRateHz,
+    });
     phase = SessionPhase.measuring;
     _imuSub = src.imuSamples.listen(_onSample);
     _liveTimer = Timer.periodic(liveUpdateInterval, (_) => _recomputeLive());
@@ -366,6 +376,12 @@ class VitalsSession extends ChangeNotifier {
 
     await _imuSub?.cancel();
     _imuSub = null;
+    link.archive?.event('measure_end', <String, Object?>{
+      'started_at_ms': _startedAt?.millisecondsSinceEpoch,
+      'samples': _magnitude.length,
+      'gap_count': gapCount,
+      'receive_errors': link.source?.receiveErrors ?? 0,
+    });
 
     final double? fs = effectiveSampleRateHz;
     if (fs == null || _magnitude.length < fs * VitalsAnalyzer.minDurationSeconds) {
@@ -381,6 +397,28 @@ class VitalsSession extends ChangeNotifier {
 
     finalResult = analyzer.analyze(_magnitude, sampleRateHz: fs);
 
+    // 測定全体の波形を1枚の画像にして保存する。JSONL の行には相対パスだけ
+    // 書く(理由は MeasurementStore のコメント)。画像化に失敗しても測定
+    // そのものの保存は続ける — 波形は付加情報であって主役ではない。
+    String? rhythmStripFile;
+    try {
+      final List<int> beatIdx = finalResult!.beatTimesSeconds
+          .map((double t) => (t * fs).round())
+          .toList(growable: false);
+      final Uint8List? png = await renderRhythmStripPng(
+        wave: finalResult!.beatBand,
+        beatIndices: beatIdx,
+        sampleRateHz: fs,
+      );
+      if (png != null) {
+        final String stripId =
+            _startedAt!.toUtc().millisecondsSinceEpoch.toString();
+        rhythmStripFile = await store.saveRhythmStripPng(stripId, png);
+      }
+    } on Exception {
+      // 画像化・保存に失敗しても測定そのものは保存する。
+    }
+
     savedRecord = MeasurementRecord.fromResult(
       startedAt: _startedAt!,
       result: finalResult!,
@@ -390,6 +428,7 @@ class VitalsSession extends ChangeNotifier {
       receiveErrors: link.source?.receiveErrors ?? 0,
       note: note,
       posture: posture,
+      rhythmStripFile: rhythmStripFile,
     );
     try {
       await store.save(savedRecord!);
