@@ -72,6 +72,7 @@ class _TestPageState extends State<TestPage> {
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
         children: <Widget>[
+          _TruthButtons(runner: r),
           _Section('输入', <String>[
             '${_kindName(m.runningKind ?? m.kind)}　${m.running ? '记录中' : (m.starting ? '连接中…' : '没有在记录')}'
                 '${m.startedAt != null && m.running ? '（${_dur(DateTime.now().difference(m.startedAt!))}）' : ''}',
@@ -162,6 +163,165 @@ class _TestPageState extends State<TestPage> {
     } on FileSystemException {
       return '文件还没有';
     }
+  }
+}
+
+/// D：正解のラベル（見ている人が押す）。押した時刻から、その動き。
+const List<(String, String)> truthButtons = <(String, String)>[
+  ('lie', '趴下'),
+  ('sit', '坐'),
+  ('stand', '站'),
+  ('walk', '走'),
+  ('run', '跑'),
+  ('scratch', '挠'),
+  ('lick', '舔'),
+  ('drink', '喝水'),
+  ('eat', '吃'),
+  ('tremble', '发抖'),
+  ('other', '其他'),
+];
+
+class _TruthButtons extends StatefulWidget {
+  const _TruthButtons({required this.runner});
+  final PipelineRunner runner;
+
+  @override
+  State<_TruthButtons> createState() => _TruthButtonsState();
+}
+
+class _TruthButtonsState extends State<_TruthButtons> {
+  final TextEditingController _hr = TextEditingController();
+  final TextEditingController _rr = TextEditingController();
+  String? _note;
+
+  @override
+  void dispose() {
+    _hr.dispose();
+    _rr.dispose();
+    super.dispose();
+  }
+
+  static String _name(String key) =>
+      truthButtons.firstWhere(((String, String) b) => b.$1 == key, orElse: () => (key, key)).$2;
+
+  static String _clock(int ms) {
+    final DateTime t = DateTime.fromMillisecondsSinceEpoch(ms);
+    String two(int v) => v.toString().padLeft(2, '0');
+    return '${two(t.hour)}:${two(t.minute)}:${two(t.second)}';
+  }
+
+  void _press(String key) {
+    final bool ok = widget.runner.markNow(key);
+    setState(() => _note = ok ? null : '没有在记录，按了也不会留下');
+  }
+
+  void _undo() {
+    final TruthMark? m = widget.runner.undoLastButton();
+    setState(() => _note = m == null ? '没有可以撤销的' : '撤销了 ${_clock(m.tMs)} 的「${_name(m.label)}」');
+  }
+
+  void _saveVitals() {
+    final double? hr = double.tryParse(_hr.text.trim());
+    final double? rr = double.tryParse(_rr.text.trim());
+    if (hr == null && rr == null) {
+      setState(() => _note = '请输入数字');
+      return;
+    }
+    final bool ok = widget.runner.addManualVitals(hr: hr, rr: rr);
+    setState(() {
+      _note = ok
+          ? '记下了：${hr != null ? '心率 ${hr.round()}' : ''}${hr != null && rr != null ? '・' : ''}${rr != null ? '呼吸 ${rr.round()}' : ''}'
+          : '没有在记录，记不下';
+      if (ok) {
+        _hr.clear();
+        _rr.clear();
+      }
+    });
+    FocusScope.of(context).unfocus();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final PipelineSession? s = widget.runner.session;
+    final List<TruthMark> pressed =
+        s == null ? const <TruthMark>[] : s.truth.where((TruthMark m) => m.source == 'button').toList();
+    final String? current = pressed.isEmpty ? null : pressed.last.label;
+    final bool live = widget.runner.nowStamp() != null;
+    return Container(
+      key: const ValueKey<String>('truth-buttons'),
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        border: Border.all(color: live ? AppColors.connected : AppColors.border),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          const Text('正确答案（看着狗，动作变了就按）',
+              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
+          const SizedBox(height: 6),
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: <Widget>[
+              for (final (String, String) b in truthButtons)
+                ChoiceChip(
+                  key: ValueKey<String>('truth-${b.$1}'),
+                  label: Text(b.$2),
+                  selected: current == b.$1,
+                  onSelected: live ? (_) => _press(b.$1) : null,
+                ),
+              ActionChip(
+                key: const ValueKey<String>('truth-undo'),
+                avatar: const Icon(Icons.undo, size: 16),
+                label: const Text('撤销'),
+                onPressed: pressed.isEmpty ? null : _undo,
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: <Widget>[
+              Expanded(
+                child: TextField(
+                  key: const ValueKey<String>('truth-hr'),
+                  controller: _hr,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  decoration: const InputDecoration(labelText: '数的心率（次/分）', isDense: true),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: TextField(
+                  key: const ValueKey<String>('truth-rr'),
+                  controller: _rr,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  decoration: const InputDecoration(labelText: '数的呼吸（次/分）', isDense: true),
+                ),
+              ),
+              const SizedBox(width: 8),
+              FilledButton.tonal(
+                key: const ValueKey<String>('truth-vitals-save'),
+                onPressed: live ? _saveVitals : null,
+                child: const Text('记下'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            [
+              ?_note,
+              if (pressed.isNotEmpty)
+                '按过的（最近 3 个）：${pressed.reversed.take(3).map((TruthMark m) => '${_clock(m.tMs)} ${_name(m.label)}').join('、')}',
+              if (!live) '开始记录、收到数据以后才能按',
+            ].join('\n'),
+            style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+          ),
+        ],
+      ),
+    );
   }
 }
 

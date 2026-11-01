@@ -128,6 +128,7 @@ class PipelineSession {
   int? _clockOffsetUs; // スマホの時計 − 首輪の時計（PetImuSample 用）
   int _latestUs = _unsetUs;
   int _processedToUs = _unsetUs;
+  ImuSample? lastSample; // 一番新しいサンプル（D のボタンの時刻に使う）
   double? fs;
   int? anchorUs;
   int lastK = -1;
@@ -267,6 +268,7 @@ class PipelineRunner extends ChangeNotifier {
     s._lastUs[x.sensor] = x.tDevUs;
     if (s._buf.isEmpty && s.windows.isEmpty && s._processedToUs == _unsetUs) s._processedToUs = x.tDevUs;
     s._buf.add(x);
+    s.lastSample = x;
     samplesIn++;
     if (x.tDevUs > s._latestUs) s._latestUs = x.tDevUs;
     if (!s._busy && s._latestUs - s._processedToUs >= chunkNewS * 1e6 && _spanUs(s) >= _minSpanUs) {
@@ -288,6 +290,47 @@ class PipelineRunner extends ChangeNotifier {
     s.truth.add(m);
     unawaited(store?.appendTruth(s.id, m));
     notifyListeners();
+  }
+
+  /// 今の時刻（首輪の時計と UTC）。最後に受けたサンプルからスマホの時計で進める
+  /// （受信の遅れの分。偽のデータを速く流しているときは進めない）。サンプルがまだなければ null。
+  ({int tDevUs, int tMs})? nowStamp() {
+    final ImuSample? x = _session?.lastSample;
+    final int? xm = x?.tMs;
+    if (x == null || xm == null) return null;
+    final int raw = _nowMs() - xm;
+    final int d = raw < 0 ? 0 : (raw > 2000 ? 2000 : raw);
+    return (tDevUs: x.tDevUs + d * 1000, tMs: xm + d);
+  }
+
+  /// D：見ている人がボタンを押した＝「今からこの動き」。記録していないときは false。
+  bool markNow(String label) {
+    final ({int tDevUs, int tMs})? t = nowStamp();
+    if (t == null) return false;
+    addTruth(TruthMark(tDevUs: t.tDevUs, tMs: t.tMs, label: label, source: 'button'));
+    return true;
+  }
+
+  /// D：最後に押したボタンを取り消す（押し間違い）。取り消したものを返す。
+  TruthMark? undoLastButton() {
+    final PipelineSession? s = _session;
+    if (s == null) return null;
+    final int i = s.truth.lastIndexWhere((TruthMark m) => m.source == 'button');
+    if (i < 0) return null;
+    final TruthMark m = s.truth.removeAt(i);
+    unawaited(store?.appendTruthUndo(s.id, m));
+    notifyListeners();
+    return m;
+  }
+
+  /// D：手で数えた心拍・呼吸（回/分）。正解として残すだけで、毎日の集計には入れない（kind が hr_truth・rr_truth）。
+  bool addManualVitals({double? hr, double? rr}) {
+    final ({int tDevUs, int tMs})? t = nowStamp();
+    if (t == null || (hr == null && rr == null)) return false;
+    if (hr != null) addVital(VitalReading(tMs: t.tMs, tDevUs: t.tDevUs, kind: 'hr_truth', value: hr, valid: true));
+    if (rr != null) addVital(VitalReading(tMs: t.tMs, tDevUs: t.tDevUs, kind: 'rr_truth', value: rr, valid: true));
+    notifyListeners();
+    return true;
   }
 
   /// 残りを全部計算して、このセッションを閉じる。

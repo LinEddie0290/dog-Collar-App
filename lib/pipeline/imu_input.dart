@@ -18,10 +18,13 @@ enum InputKind { collar, unity, fake }
 
 /// Unity が送る正解のラベル（D の正解ラベルと同じところに入れる）。
 class TruthMark {
-  const TruthMark({required this.tDevUs, required this.tMs, required this.label});
+  const TruthMark({required this.tDevUs, required this.tMs, required this.label, this.source = ''});
   final int tDevUs;
   final int tMs;
   final String label;
+
+  /// どこから来たか：unity / fake / button（D：見ている人が押した）。
+  final String source;
 }
 
 /// BLE 以外の入力。サンプルは前処理の共通形式（m/s²・rad/s）で出す。
@@ -84,7 +87,7 @@ class UnityStreamParser {
           return _imu(j);
         case 'label':
           final int t = (j['t_us'] as num).toInt();
-          marks.add(TruthMark(tDevUs: t, tMs: _tMs(t), label: j['label'].toString()));
+          marks.add(TruthMark(tDevUs: t, tMs: _tMs(t), label: j['label'].toString(), source: 'unity'));
           return const <ImuSample>[];
         case 'end':
           ended = true;
@@ -409,7 +412,7 @@ class FakeImuInput extends ImuInput {
       final String label = g.labelAt((s.tDevUs - g.t0Us) / 1e6);
       if (label != _lastLabel) {
         _lastLabel = label;
-        _marks.add(TruthMark(tDevUs: s.tDevUs, tMs: s.tMs ?? -1, label: label));
+        _marks.add(TruthMark(tDevUs: s.tDevUs, tMs: s.tMs ?? -1, label: label, source: 'fake'));
       }
       _out.add(s);
     }

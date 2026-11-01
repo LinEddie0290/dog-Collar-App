@@ -81,11 +81,15 @@ void main() {
     expect(find.textContaining('CNN 和正确答案一致'), findsOneWidget);
     expect(find.textContaining('front：'), findsOneWidget);
     expect(find.textContaining('缺口 0 次'), findsOneWidget);
-    expect(find.byKey(const ValueKey<String>('test-timeline')), findsOneWidget);
-
     // 1 秒ごとの更新が動く（タイマーは画面を閉じると止まる）
     await tester.pump(const Duration(seconds: 2));
     expect(find.textContaining('个/秒'), findsOneWidget);
+
+    // 上に D のボタンがあるので、帯は下の方（ListView は見えるところだけ作る）
+    // D の入力欄（TextField）も Scrollable を持つので、ページ全体（一番外）を指定する
+    await tester.scrollUntilVisible(find.byKey(const ValueKey<String>('test-timeline')), 300,
+        scrollable: find.byType(Scrollable).first);
+    expect(find.byKey(const ValueKey<String>('test-timeline')), findsOneWidget);
 
     await tester.runAsync(() => m.stop());
     await tester.pumpWidget(const SizedBox());

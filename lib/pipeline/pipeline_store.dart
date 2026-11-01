@@ -4,7 +4,8 @@
 ///   `<Documents>/pipeline_sessions/<session_id>.jsonl`
 ///   1 行目  {"rec":"header","schema":"collar.app_session/0.1","session_id":...,"started_ms":...}
 ///   そのあと {"rec":"windows","t_us":[...],"t_ms":[...],"activity":[...],"label":[...],"prob":[...]}
-///          {"rec":"truth","t_ms":...,"t_us":...,"label":"walk"}（その時刻からこの動き）
+///          {"rec":"truth","t_ms":...,"t_us":...,"label":"walk","source":"button"}（その時刻からこの動き）
+///          {"rec":"truth_undo","t_us":...,"label":"walk"}（D のボタンの取り消し）
 ///          {"rec":"vital","t_ms":...,"t_us":...,"kind":"hr","value":72.0,"valid":true}
 /// 出来事は保存しない（読むときに窓から作り直す。しきい値を変えても前の日に効く）。
 library;
@@ -81,6 +82,14 @@ class PipelineStore {
         't_ms': m.tMs,
         't_us': m.tDevUs,
         'label': m.label,
+        if (m.source.isNotEmpty) 'source': m.source,
+      });
+
+  /// D の取り消し。読むときに同じ時刻・ラベルのボタンの印を消す。
+  Future<void> appendTruthUndo(String id, TruthMark m) => _append(id, <String, Object?>{
+        'rec': 'truth_undo',
+        't_us': m.tDevUs,
+        'label': m.label,
       });
 
   /// 書きかけのものも含めて全部待つ。
@@ -133,7 +142,12 @@ List<StoredSession> loadSessionsFrom(String dirPath) {
             tDevUs: (m['t_us'] as num).toInt(),
             tMs: (m['t_ms'] as num).toInt(),
             label: m['label'] as String,
+            source: m['source'] as String? ?? '',
           ));
+        case 'truth_undo':
+          final int i = s.truth.lastIndexWhere(
+              (TruthMark x) => x.tDevUs == (m['t_us'] as num).toInt() && x.label == m['label'] && x.source == 'button');
+          if (i >= 0) s.truth.removeAt(i);
         case 'vital':
           s.vitals.add(VitalReading(
             tMs: (m['t_ms'] as num).toInt(),
