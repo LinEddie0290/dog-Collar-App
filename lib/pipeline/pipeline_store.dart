@@ -56,6 +56,22 @@ class PipelineStore {
     return _chain;
   }
 
+  /// E：生の IMU（CSV）。最初に書くときに列の名前の行をつける。
+  Future<void> appendRaw(String id, String csvRows) {
+    final Future<void> job = _chain.then((_) async {
+      final Directory d = await dir();
+      final File f = File('${d.path}/$id.imu.csv');
+      final String head = f.existsSync() ? '' : 't_dev_us,t_ms,sensor,ax,ay,az,gx,gy,gz\n';
+      await f.writeAsString('$head$csvRows', mode: FileMode.append);
+    });
+    _chain = job.catchError((Object _) {});
+    return _chain;
+  }
+
+  /// E：犬の情報などを途中で変えた（後の行が勝つ）。
+  Future<void> appendInfo(String id, Map<String, Object?> info) =>
+      _append(id, <String, Object?>{'rec': 'info', ...info});
+
   Future<void> startSession(String id, Map<String, Object?> header) =>
       _append(id, <String, Object?>{'rec': 'header', 'schema': appSessionSchema, 'session_id': id, ...header});
 

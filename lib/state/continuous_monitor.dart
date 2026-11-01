@@ -9,6 +9,7 @@
 library;
 
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:collar_data/collar_data.dart';
 import 'package:collar_pipeline/collar_pipeline.dart';
@@ -18,6 +19,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../data/ble_collar_data_source.dart';
 import '../pipeline/imu_input.dart';
 import '../pipeline/pipeline_runner.dart';
+import '../pipeline/test_subject.dart';
 import 'collar_link.dart';
 import 'vitals_session.dart';
 
@@ -39,11 +41,15 @@ class ContinuousMonitor extends ChangeNotifier {
   static const String _kKind = 'monitor.input';
   static const String _kUrl = 'monitor.unity_url';
   static const String _kSpeed = 'monitor.fake_speed';
+  static const String _kSubject = 'monitor.subject';
 
   /// 入力の選び方（F）。止めているときだけ変えられる。
   InputKind kind = InputKind.collar;
   String unityUrl = 'ws://192.168.1.96:8765/imu'; // 10/26 に正轩とつないだときのアドレス
   double fakeSpeed = 1;
+
+  /// E：試験の犬の情報。記録の頭に入れる。
+  TestSubject subject = const TestSubject();
 
   bool running = false;
   bool starting = false;
@@ -65,6 +71,8 @@ class ContinuousMonitor extends ChangeNotifier {
       kind = InputKind.values.firstWhere((InputKind x) => x.name == k, orElse: () => InputKind.collar);
       unityUrl = p.getString(_kUrl) ?? unityUrl;
       fakeSpeed = p.getDouble(_kSpeed) ?? fakeSpeed;
+      final String? sj = p.getString(_kSubject);
+      if (sj != null) subject = TestSubject.fromJson(jsonDecode(sj) as Map<String, dynamic>);
       notifyListeners();
     } catch (_) {
       // 読めなくても既定のまま使える
@@ -87,12 +95,32 @@ class ContinuousMonitor extends ChangeNotifier {
     }
   }
 
+  /// E：犬の情報を変える。記録中なら今の記録にも書き足す。
+  Future<void> setSubject(TestSubject s) async {
+    subject = s;
+    runner.sessionInfo = <String, Object?>{...runner.sessionInfo, 'subject': s.toJson()};
+    if (running) runner.updateInfo();
+    notifyListeners();
+    try {
+      final SharedPreferences p = await SharedPreferences.getInstance();
+      await p.setString(_kSubject, jsonEncode(s.toJson()));
+    } catch (_) {
+      // 保存できなくても今回は使える
+    }
+  }
+
   Future<void> toggle() => running ? stop() : start();
 
   Future<void> start() async {
     if (running || starting) return;
     starting = true;
     errorMessage = null;
+    runner.sessionInfo = <String, Object?>{
+      'input': kind.name,
+      'subject': subject.toJson(),
+      if (kind == InputKind.unity) 'unity_url': unityUrl,
+      if (kind == InputKind.fake) 'fake_speed': fakeSpeed,
+    };
     notifyListeners();
     try {
       if (kind == InputKind.collar) {

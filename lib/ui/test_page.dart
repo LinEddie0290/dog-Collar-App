@@ -9,15 +9,26 @@ import '../pipeline/pipeline_runner.dart';
 import '../pipeline/truth_compare.dart';
 import '../state/continuous_monitor.dart';
 import 'app_colors.dart';
+import 'test_page_sessions.dart';
 
 /// T34-C：テスト画面（開発者向け）。記録中の様子を 1 画面に、1 秒ごとに更新。
 /// 入力・受信（周波数・抜け）・処理・今の状態・最近 2 分の帯・出来事・保存。
 /// 文言は暫定で中国語直書き。見た目はあとで直す。
 class TestPage extends StatefulWidget {
-  const TestPage({super.key, required this.monitor, this.refresh = const Duration(seconds: 1)});
+  const TestPage({
+    super.key,
+    required this.monitor,
+    this.refresh = const Duration(seconds: 1),
+    this.share = shareWithSheet,
+    this.exportDir = defaultExportDir,
+  });
 
   final ContinuousMonitor monitor;
   final Duration refresh;
+
+  /// E：書き出したファイルの渡し方（テストでは差し替える）。
+  final ShareFile share;
+  final Future<String> Function() exportDir;
 
   @override
   State<TestPage> createState() => _TestPageState();
@@ -73,6 +84,7 @@ class _TestPageState extends State<TestPage> {
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
         children: <Widget>[
           _TruthButtons(runner: r),
+          SubjectCard(monitor: m),
           _Section('输入', <String>[
             '${_kindName(m.runningKind ?? m.kind)}　${m.running ? '记录中' : (m.starting ? '连接中…' : '没有在记录')}'
                 '${m.startedAt != null && m.running ? '（${_dur(DateTime.now().difference(m.startedAt!))}）' : ''}',
@@ -132,7 +144,9 @@ class _TestPageState extends State<TestPage> {
           _Section('保存', <String>[
             if (s == null) '没有在记录' else '记录 ${s.id}　正确答案 ${truth.length} 个　心率 ${s.vitals.length} 个',
             if (s != null && _dir != null) _fileLine('$_dir/${s.id}.jsonl'),
+            if (s != null && _dir != null) '生的 IMU：${_fileLine('$_dir/${s.id}.imu.csv')}',
           ]),
+          SessionsCard(runner: r, share: widget.share, exportDir: widget.exportDir),
         ],
       ),
     );

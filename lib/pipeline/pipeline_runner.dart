@@ -129,6 +129,8 @@ class PipelineSession {
   int _latestUs = _unsetUs;
   int _processedToUs = _unsetUs;
   ImuSample? lastSample; // 一番新しいサンプル（D のボタンの時刻に使う）
+  final StringBuffer _raw = StringBuffer(); // 生の IMU（E：.imu.csv にためて書く）
+  int _rawRows = 0;
   double? fs;
   int? anchorUs;
   int lastK = -1;
@@ -154,6 +156,8 @@ class PipelineRunner extends ChangeNotifier {
     this.tailS = 10,
     this.recentKeep = 300,
     this.dataVersionEvery = const Duration(minutes: 5),
+    this.saveRaw = true,
+    this.rawFlushRows = 1024,
     int Function()? nowMs,
   })  : _loadClassifier = loadClassifier ?? loadBundledClassifier,
         _compute = compute ?? _computeInIsolate,
@@ -180,6 +184,13 @@ class PipelineRunner extends ChangeNotifier {
 
   /// 毎日のページに「読み直して」と知らせる間隔（止めたときはすぐ）。
   final Duration dataVersionEvery;
+
+  /// E：受けた IMU をそのまま `<id>.imu.csv` にも残す（PC で Python と比べるため）。
+  final bool saveRaw;
+  final int rawFlushRows;
+
+  /// E：新しいセッションの頭（header）に入れる情報（犬の情報・入力の種類）。[ContinuousMonitor] が入れる。
+  Map<String, Object?> sessionInfo = <String, Object?>{};
 
   Future<WindowClassifier>? _clf;
   Future<void> _chain = Future<void>.value();
@@ -242,7 +253,7 @@ class PipelineRunner extends ChangeNotifier {
     final PipelineSession s = PipelineSession('s$now', now);
     _session = s;
     sensorStats.clear();
-    unawaited(store?.startSession(s.id, <String, Object?>{'started_ms': now}));
+    unawaited(store?.startSession(s.id, <String, Object?>{'started_ms': now, ...sessionInfo}));
     notifyListeners();
     return s;
   }
@@ -269,12 +280,44 @@ class PipelineRunner extends ChangeNotifier {
     if (s._buf.isEmpty && s.windows.isEmpty && s._processedToUs == _unsetUs) s._processedToUs = x.tDevUs;
     s._buf.add(x);
     s.lastSample = x;
+    if (saveRaw && store != null) _rawLine(s, x);
     samplesIn++;
     if (x.tDevUs > s._latestUs) s._latestUs = x.tDevUs;
     if (!s._busy && s._latestUs - s._processedToUs >= chunkNewS * 1e6 && _spanUs(s) >= _minSpanUs) {
       s._busy = true;
       _enqueue(() => _process(s, flush: false));
     }
+  }
+
+  void _rawLine(PipelineSession s, ImuSample x) {
+    s._raw
+      ..write(x.tDevUs)
+      ..write(',')
+      ..write(x.tMs ?? '')
+      ..write(',')
+      ..write(x.sensor);
+    for (final double v in <double>[x.ax, x.ay, x.az, x.gx, x.gy, x.gz]) {
+      s._raw
+        ..write(',')
+        ..write(v.isNaN ? '' : v.toStringAsFixed(5));
+    }
+    s._raw.write('\n');
+    s._rawRows++;
+    if (s._rawRows >= rawFlushRows) _flushRaw(s);
+  }
+
+  void _flushRaw(PipelineSession s) {
+    if (s._rawRows == 0) return;
+    final String text = s._raw.toString();
+    s._raw.clear();
+    s._rawRows = 0;
+    unawaited(store?.appendRaw(s.id, text));
+  }
+
+  /// E：犬の情報などを途中で変えたとき、今のセッションに書き足す（読むときは後のものが勝つ）。
+  void updateInfo() {
+    final PipelineSession? s = _session;
+    if (s != null) unawaited(store?.appendInfo(s.id, sessionInfo));
   }
 
   /// 心拍・呼吸の結果を入れる（B の自動測定から）。tDevUs は首輪の時計。
@@ -338,6 +381,7 @@ class PipelineRunner extends ChangeNotifier {
     final PipelineSession? s = _session;
     _session = null;
     if (s == null) return _chain;
+    _flushRaw(s);
     _enqueue(() => _process(s, flush: true));
     final Future<void> done = _chain.then((_) {
       dataVersion.value++;
