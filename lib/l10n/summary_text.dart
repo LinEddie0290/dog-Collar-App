@@ -37,6 +37,31 @@ class SummaryTextZh {
   final String trendExercise = '运动（分钟）';
   final String trendSleep = '睡眠（分钟）';
   final String demoNote = '演示：模拟的狗的 14 天数据';
+  // T34-A：实际的数据（试用版。文言以后再改）
+  final String realNote = '实际数据（试用版：这个手机算出来的结果）';
+  final String realMode = '实际';
+  final String demoMode = '演示';
+  final String reload = '重新读取';
+  final String noRealData = '还没有实际的数据。连上项圈，按「开始记录」。';
+  final String rawTitle = '试用：这天的原始数字';
+
+  String rawLines(Map<String, double> m) {
+    const Map<String, String> names = <String, String>{
+      'rest_lie': '休息（趴着）',
+      'walk_run': '走・跑',
+      'other': '其他动作',
+      'lick': '舔',
+      'scratch': '挠',
+      'shake': '甩',
+      'long_still': '很久不动',
+    };
+    final List<String> out = <String>['戴着的时间：${(m['wear_min'] ?? 0).toStringAsFixed(1)} 分钟'];
+    for (final MapEntry<String, String> e in names.entries) {
+      final double? v = m[e.key];
+      if (v != null && v > 0) out.add('${e.value}：${v.toStringAsFixed(1)} 分钟');
+    }
+    return out.join('\n');
+  }
 
   String daily(TextItem item) {
     switch (item.textKey) {

@@ -8,11 +8,16 @@ import 'widgets/sparkline.dart';
 /// 「每天」画面(T23 デモ版 → T16 で完成させる)。
 /// パイプラインの 1日まとめ JSON を読み、4 枚のカード(运动・睡眠・皮肤・生理)を出す。
 /// 日を前後に動かせる。提醒は黄色(notice)。赤は使わない(診断ではないので)。
+///
+/// T34-A：[live] を渡すと本物のデータ（スマホで計算した結果）を出し、デモと切り替えられる。
+/// [header] はページの一番上に出す（記録の開始・停止のバー）。
 class DailySummaryPage extends StatefulWidget {
-  DailySummaryPage({super.key, DemoSummaryRepository? repository})
+  DailySummaryPage({super.key, DemoSummaryRepository? repository, this.live, this.header})
       : repository = repository ?? DemoSummaryRepository();
 
   final DemoSummaryRepository repository;
+  final SummarySource? live;
+  final Widget? header;
 
   @override
   State<DailySummaryPage> createState() => _DailySummaryPageState();
@@ -20,44 +25,105 @@ class DailySummaryPage extends StatefulWidget {
 
 class _DailySummaryPageState extends State<DailySummaryPage> {
   static const SummaryTextZh _t = SummaryTextZh();
-  late final Future<SummaryBundle> _future = widget.repository.load();
+  late bool _showDemo = widget.live == null;
+  late Future<SummaryBundle> _future = _source.load();
   int? _index; // 見ている日。最初は最新の日
+
+  SummarySource get _source => _showDemo ? widget.repository : widget.live!;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.live?.changes?.addListener(_onChanged);
+  }
+
+  @override
+  void dispose() {
+    widget.live?.changes?.removeListener(_onChanged);
+    super.dispose();
+  }
+
+  void _onChanged() {
+    if (!_showDemo) _reload();
+  }
+
+  void _reload() {
+    if (!mounted) return;
+    setState(() {
+      _future = _source.load();
+      _index = null;
+    });
+  }
+
+  /// 本物のデータがあるときだけ：記録のバーと「实际／演示」の切り替え。
+  List<Widget> _top() {
+    if (widget.live == null) return const <Widget>[];
+    return <Widget>[
+      if (widget.header != null) ...<Widget>[widget.header!, const SizedBox(height: 8)],
+      Row(
+        children: <Widget>[
+          SegmentedButton<bool>(
+            segments: <ButtonSegment<bool>>[
+              ButtonSegment<bool>(value: false, label: Text(_t.realMode)),
+              ButtonSegment<bool>(value: true, label: Text(_t.demoMode)),
+            ],
+            selected: <bool>{_showDemo},
+            onSelectionChanged: (Set<bool> v) {
+              _showDemo = v.first;
+              _reload();
+            },
+          ),
+          const Spacer(),
+          IconButton(tooltip: _t.reload, onPressed: _reload, icon: const Icon(Icons.refresh)),
+        ],
+      ),
+      const SizedBox(height: 8),
+    ];
+  }
+
+  Widget _plain(List<Widget> top, Widget child) => ListView(
+        padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+        children: <Widget>[...top, const SizedBox(height: 24), Center(child: child)],
+      );
 
   @override
   Widget build(BuildContext context) {
     return FutureBuilder<SummaryBundle>(
       future: _future,
       builder: (BuildContext context, AsyncSnapshot<SummaryBundle> snap) {
+        final List<Widget> top = _top();
         if (snap.hasError) {
-          return Center(child: Text('${_t.unreadable}\n${snap.error}', textAlign: TextAlign.center));
+          return _plain(top, Text('${_t.unreadable}\n${snap.error}', textAlign: TextAlign.center));
         }
         if (!snap.hasData) {
-          return const Center(child: CircularProgressIndicator());
+          return _plain(top, const CircularProgressIndicator());
         }
         final SummaryBundle b = snap.data!;
         if (b.days.isEmpty) {
-          return Center(child: Text(_t.unreadable));
+          return _plain(top, Text(_showDemo ? _t.unreadable : _t.noRealData, textAlign: TextAlign.center));
         }
         final int last = b.days.length - 1;
         final int want = _index ?? last;
         final int i = want < 0 ? 0 : (want > last ? last : want);
-        return _body(context, b, i);
+        return _body(context, b, i, top);
       },
     );
   }
 
-  Widget _body(BuildContext context, SummaryBundle b, int i) {
+  Widget _body(BuildContext context, SummaryBundle b, int i, List<Widget> top) {
     final DayEntry day = b.days[i];
     final DailySummary? s = day.summary;
+    final Map<String, double>? raw = _showDemo ? null : b.raw[day.date];
     return ListView(
       padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
       children: <Widget>[
+        ...top,
         Text(
           _t.pageTitle,
           style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w600),
         ),
         const SizedBox(height: 2),
-        Text(_t.demoNote, style: const TextStyle(fontSize: 12, color: AppColors.textFaint)),
+        Text(_showDemo ? _t.demoNote : _t.realNote, style: const TextStyle(fontSize: 12, color: AppColors.textFaint)),
         const SizedBox(height: 12),
         _DayBar(
           dayLabel: _t.dayLabel(i + 1),
@@ -69,6 +135,10 @@ class _DailySummaryPageState extends State<DailySummaryPage> {
           nextLabel: _t.nextDay,
         ),
         const SizedBox(height: 12),
+        if (raw != null) ...<Widget>[
+          _Card(key: const ValueKey<String>('card-raw'), icon: Icons.science_outlined, title: _t.rawTitle, lines: <String>[_t.rawLines(raw)]),
+          const SizedBox(height: 10),
+        ],
         if (s == null)
           _Card(icon: Icons.error_outline, title: day.date, lines: <String>[_t.unreadable])
         else

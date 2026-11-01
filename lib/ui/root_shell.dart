@@ -5,6 +5,8 @@ import '../state/collar_controller.dart';
 import '../state/locale_controller.dart';
 import '../state/location_controller.dart';
 import '../state/collar_link.dart';
+import '../data/daily_summary.dart';
+import '../state/continuous_monitor.dart';
 import '../state/vitals_session.dart';
 import 'history_page.dart';
 import 'measure_page.dart';
@@ -12,6 +14,7 @@ import 'daily_summary_page.dart';
 import 'home_page.dart';
 import 'map_page.dart';
 import 'settings_page.dart';
+import 'widgets/monitor_bar.dart';
 
 class RootShell extends StatefulWidget {
   const RootShell({
@@ -21,6 +24,8 @@ class RootShell extends StatefulWidget {
     required this.locationController,
     required this.vitalsSession,
     required this.collarLink,
+    this.monitor,
+    this.liveSummary,
   });
 
   final CollarController controller;
@@ -28,6 +33,10 @@ class RootShell extends StatefulWidget {
   final LocationController locationController;
   final VitalsSession vitalsSession;
   final CollarLink collarLink;
+
+  /// T34-A：記録の開始・停止と、本物のデータの毎日のまとめ。null ならデモだけ。
+  final ContinuousMonitor? monitor;
+  final SummarySource? liveSummary;
 
   @override
   State<RootShell> createState() => _RootShellState();
@@ -43,7 +52,10 @@ class _RootShellState extends State<RootShell> {
     final List<Widget> pages = <Widget>[
       HomePage(controller: widget.controller),
       // T23 デモ：パイプラインの 1日まとめ(每天看・提醒)。T16 で完成させる。
-      DailySummaryPage(),
+      DailySummaryPage(
+        live: widget.liveSummary,
+        header: widget.monitor == null ? null : MonitorBar(monitor: widget.monitor!),
+      ),
       MapPage(controller: widget.controller, locationController: widget.locationController),
       // 「首輪」と「記録」は測定画面から開く。タブを増やしすぎると
       // 下部ナビのラベルが潰れるため。

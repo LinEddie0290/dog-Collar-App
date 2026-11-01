@@ -11,6 +11,10 @@ import 'data/measurement_store.dart';
 import 'state/location_controller.dart';
 import 'state/collar_link.dart';
 import 'state/vitals_session.dart';
+import 'state/continuous_monitor.dart';
+import 'pipeline/pipeline_runner.dart';
+import 'pipeline/pipeline_store.dart';
+import 'pipeline/pipeline_summary_repository.dart';
 import 'ui/amap_init.dart';
 import 'ui/root_shell.dart';
 import 'ui/theme.dart';
@@ -33,6 +37,11 @@ class _CollarAppState extends State<CollarApp> {
   final MeasurementStore _measurementStore = MeasurementStore();
   final CollarLink _collarLink = CollarLink();
   late final VitalsSession _vitalsSession;
+  // T34-A：スマホの中の処理の流れ（受けた IMU → 毎日のまとめ）
+  final PipelineStore _pipelineStore = PipelineStore();
+  late final PipelineRunner _pipelineRunner = PipelineRunner(store: _pipelineStore);
+  late final ContinuousMonitor _monitor;
+  late final PipelineSummaryRepository _liveSummary;
   bool _amapInitialized = false;
 
   @override
@@ -41,6 +50,8 @@ class _CollarAppState extends State<CollarApp> {
     _locationController = LocationController(collar: _controller);
     _vitalsSession =
         VitalsSession(store: _measurementStore, link: _collarLink);
+    _monitor = ContinuousMonitor(link: _collarLink, runner: _pipelineRunner, vitals: _vitalsSession);
+    _liveSummary = PipelineSummaryRepository(store: _pipelineStore, changes: _pipelineRunner.dataVersion);
     unawaited(_collarLink.loadKnown());
     unawaited(_localeController.loadSaved());
   }
@@ -50,6 +61,8 @@ class _CollarAppState extends State<CollarApp> {
     _controller.dispose();
     _localeController.dispose();
     _locationController.dispose();
+    _monitor.dispose();
+    _pipelineRunner.dispose();
     _vitalsSession.dispose();
     _collarLink.dispose();
     super.dispose();
@@ -97,6 +110,8 @@ class _CollarAppState extends State<CollarApp> {
             locationController: _locationController,
             vitalsSession: _vitalsSession,
             collarLink: _collarLink,
+            monitor: _monitor,
+            liveSummary: _liveSummary,
           ),
         );
       },

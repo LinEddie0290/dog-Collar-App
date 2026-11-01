@@ -1,0 +1,15 @@
+name: collar_pipeline
+description: >
+  Pure-Dart port of collar-pipeline's processing (T34-A, D-049): IMU preprocessing
+  (align → low-pass → gravity split → downsample → 2 s windows), state judgment,
+  and later events and the daily summary. Same numbers as the Python version
+  (checked by golden files in the app's test/fixtures/pipeline). No dependencies.
+version: 0.1.0
+publish_to: none
+
+environment:
+  sdk: ">=3.0.0 <4.0.0"
+
+dependencies:
+  collar_imu_cnn:
+    path: ../collar_imu_cnn
