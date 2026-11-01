@@ -89,6 +89,33 @@ Future<WindowClassifier> loadBundledClassifier() async {
 
 const int _unsetUs = -1 << 62;
 
+/// 受信の様子（テスト画面 C 用）。センサーごと、首輪の時計で数える。
+class SensorStats {
+  int count = 0;
+
+  /// 抜け（間が maxGapMs＝50 ms より長い）の数と、抜けた時間の合計（秒）。
+  int gaps = 0;
+  double gapSeconds = 0;
+  double? _emaDtUs;
+
+  /// 首輪の時計での周波数（抜けを除いた間の平均から）。
+  double? get rateHz {
+    final double? d = _emaDtUs;
+    return d == null || d <= 0 ? null : 1e6 / d;
+  }
+
+  void _add(int dtUs, int maxGapUs) {
+    count++;
+    if (dtUs > maxGapUs) {
+      gaps++;
+      gapSeconds += dtUs / 1e6;
+      return;
+    }
+    final double? e = _emaDtUs;
+    _emaDtUs = e == null ? dtUs.toDouble() : e * 0.98 + dtUs * 0.02;
+  }
+}
+
 /// 1 回の接続（首輪の時計がつながっている間）の記録。
 class PipelineSession {
   PipelineSession(this.id, this.startedMs);
@@ -178,6 +205,12 @@ class PipelineRunner extends ChangeNotifier {
 
   bool get isRunning => _session != null;
 
+  /// センサーごとの受信の様子（今のセッション）。
+  final Map<String, SensorStats> sensorStats = <String, SensorStats>{};
+
+  /// まだ計算していない（ためている）サンプルの数。
+  int get bufferedSamples => _session?._buf.length ?? 0;
+
   /// 首輪（BLE）のサンプルを入れる。onboardImu → front、BMI088 → side。
   /// UTC は最初のサンプルを受けたときのスマホの時計から決める。
   void addPet(PetImuSample p) {
@@ -207,6 +240,7 @@ class PipelineRunner extends ChangeNotifier {
     final int now = _nowMs();
     final PipelineSession s = PipelineSession('s$now', now);
     _session = s;
+    sensorStats.clear();
     unawaited(store?.startSession(s.id, <String, Object?>{'started_ms': now}));
     notifyListeners();
     return s;
@@ -224,6 +258,12 @@ class PipelineRunner extends ChangeNotifier {
       last = null;
     }
     if (last != null && x.tDevUs <= last) return; // 同じ時刻・順番の入れ替わりは捨てる
+    final SensorStats st = sensorStats.putIfAbsent(x.sensor, SensorStats.new);
+    if (last == null) {
+      st.count++;
+    } else {
+      st._add(x.tDevUs - last, cfg.maxGapMs * 1000);
+    }
     s._lastUs[x.sensor] = x.tDevUs;
     if (s._buf.isEmpty && s.windows.isEmpty && s._processedToUs == _unsetUs) s._processedToUs = x.tDevUs;
     s._buf.add(x);

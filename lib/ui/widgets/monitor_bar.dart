@@ -6,6 +6,7 @@ import '../../pipeline/imu_input.dart';
 import '../../pipeline/pipeline_runner.dart';
 import '../../state/continuous_monitor.dart';
 import '../app_colors.dart';
+import '../test_page.dart';
 
 /// T34-A・F：「每天」のページの上の記録バー。入力の選び方（项圈／Unity／模拟）、開始・停止、
 /// 今の処理の様子。文言は暫定で中国語直書き（デザインと 3 言語はあとで）。
@@ -71,6 +72,13 @@ class MonitorBar extends StatelessWidget {
                               style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
                       ],
                     ),
+                  ),
+                  IconButton(
+                    key: const ValueKey<String>('open-test-page'),
+                    tooltip: '测试画面',
+                    icon: const Icon(Icons.analytics_outlined),
+                    onPressed: () => Navigator.of(context)
+                        .push(MaterialPageRoute<void>(builder: (_) => TestPage(monitor: monitor))),
                   ),
                   FilledButton.tonal(
                     key: const ValueKey<String>('monitor-toggle'),
