@@ -54,6 +54,7 @@ class _CollarAppState extends State<CollarApp> {
     _liveSummary = PipelineSummaryRepository(store: _pipelineStore, changes: _pipelineRunner.dataVersion);
     unawaited(_collarLink.loadKnown());
     unawaited(_localeController.loadSaved());
+    unawaited(_monitor.loadSaved());
   }
 
   @override

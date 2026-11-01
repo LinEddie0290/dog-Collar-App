@@ -40,6 +40,9 @@
 	<!-- iOS 12 以前向け。新しい端末では上の項目が使われる。 -->
 	<key>NSBluetoothPeripheralUsageDescription</key>
 	<string>首輪とつないで、ワンちゃんの体温と位置を受け取るために Bluetooth を使用します。</string>
+	<!-- T34-F：開発用。同じ Wi-Fi の PC（正轩の Unity）から WebSocket で動きのデータを受ける。 -->
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>開発中のテストで、同じ Wi-Fi のパソコンから動きのデータを受け取るために使用します。</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>地図にワンちゃんと自分の位置を表示するために、位置情報を使用します。</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>

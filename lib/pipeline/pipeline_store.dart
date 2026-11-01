@@ -4,6 +4,7 @@
 ///   `<Documents>/pipeline_sessions/<session_id>.jsonl`
 ///   1 行目  {"rec":"header","schema":"collar.app_session/0.1","session_id":...,"started_ms":...}
 ///   そのあと {"rec":"windows","t_us":[...],"t_ms":[...],"activity":[...],"label":[...],"prob":[...]}
+///          {"rec":"truth","t_ms":...,"t_us":...,"label":"walk"}（その時刻からこの動き）
 ///          {"rec":"vital","t_ms":...,"t_us":...,"kind":"hr","value":72.0,"valid":true}
 /// 出来事は保存しない（読むときに窓から作り直す。しきい値を変えても前の日に効く）。
 library;
@@ -15,6 +16,7 @@ import 'dart:io';
 import 'package:collar_pipeline/collar_pipeline.dart';
 import 'package:path_provider/path_provider.dart';
 
+import 'imu_input.dart';
 import 'pipeline_runner.dart';
 
 const String appSessionSchema = 'collar.app_session/0.1';
@@ -25,6 +27,7 @@ class StoredSession {
   final Map<String, dynamic> header;
   final List<WindowResult> windows = <WindowResult>[];
   final List<VitalReading> vitals = <VitalReading>[];
+  final List<TruthMark> truth = <TruthMark>[];
 }
 
 class PipelineStore {
@@ -73,6 +76,13 @@ class PipelineStore {
         'valid': v.valid,
       });
 
+  Future<void> appendTruth(String id, TruthMark m) => _append(id, <String, Object?>{
+        'rec': 'truth',
+        't_ms': m.tMs,
+        't_us': m.tDevUs,
+        'label': m.label,
+      });
+
   /// 書きかけのものも含めて全部待つ。
   Future<void> idle() => _chain;
 
@@ -118,6 +128,12 @@ List<StoredSession> loadSessionsFrom(String dirPath) {
               prob: (prob[i] as num).toDouble(),
             ));
           }
+        case 'truth':
+          s.truth.add(TruthMark(
+            tDevUs: (m['t_us'] as num).toInt(),
+            tMs: (m['t_ms'] as num).toInt(),
+            label: m['label'] as String,
+          ));
         case 'vital':
           s.vitals.add(VitalReading(
             tMs: (m['t_ms'] as num).toInt(),

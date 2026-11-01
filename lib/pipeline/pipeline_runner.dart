@@ -21,6 +21,7 @@ import 'package:collar_pipeline/collar_pipeline.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart' show rootBundle;
 
+import 'imu_input.dart';
 import 'pipeline_store.dart';
 
 /// 1 つの窓の結果（保存する形）。
@@ -107,6 +108,7 @@ class PipelineSession {
 
   final List<WindowResult> windows = <WindowResult>[];
   final List<VitalReading> vitals = <VitalReading>[];
+  final List<TruthMark> truth = <TruthMark>[]; // 正解のラベル（Unity・偽のデータ・D のボタン）
   List<WindowState> states = const <WindowState>[];
   List<BehaviorEvent> events = const <BehaviorEvent>[];
 }
@@ -238,6 +240,14 @@ class PipelineRunner extends ChangeNotifier {
     final PipelineSession s = _session ?? startSession();
     s.vitals.add(v);
     unawaited(store?.appendVital(s.id, v));
+  }
+
+  /// 正解のラベル（その時刻からこの動き）。Unity・偽のデータの答え、D のボタンから。
+  void addTruth(TruthMark m) {
+    final PipelineSession s = _session ?? startSession();
+    s.truth.add(m);
+    unawaited(store?.appendTruth(s.id, m));
+    notifyListeners();
   }
 
   /// 残りを全部計算して、このセッションを閉じる。
