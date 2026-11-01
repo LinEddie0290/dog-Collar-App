@@ -198,6 +198,9 @@ class PipelineRunner extends ChangeNotifier {
   PipelineSession? _session;
   PipelineSession? get session => _session;
 
+  /// 最後に止めたセッション（止めたあともテスト画面に出すため）。
+  PipelineSession? lastSession;
+
   /// 毎日のページが読み直す合図。保存した窓がまとまるたびに増える。
   final ValueNotifier<int> dataVersion = ValueNotifier<int>(0);
   DateTime _lastDataBump = DateTime.fromMillisecondsSinceEpoch(0);
@@ -211,7 +214,7 @@ class PipelineRunner extends ChangeNotifier {
   final Set<String> warnings = <String>{};
   final List<WindowResult> recent = <WindowResult>[];
   WindowState? get lastState {
-    final List<WindowState> s = _session?.states ?? const <WindowState>[];
+    final List<WindowState> s = (_session ?? lastSession)?.states ?? const <WindowState>[];
     return s.isEmpty ? null : s.last;
   }
 
@@ -381,6 +384,7 @@ class PipelineRunner extends ChangeNotifier {
     final PipelineSession? s = _session;
     _session = null;
     if (s == null) return _chain;
+    lastSession = s;
     _flushRaw(s);
     _enqueue(() => _process(s, flush: true));
     final Future<void> done = _chain.then((_) {

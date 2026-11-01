@@ -69,8 +69,9 @@ class _TestPageState extends State<TestPage> {
   Widget build(BuildContext context) {
     final ContinuousMonitor m = widget.monitor;
     final PipelineRunner r = _r;
-    final PipelineSession? s = r.session;
-    final List<WindowResult> wins = s == null ? r.recent : _tail(s.windows, 120);
+    // 止めたあとも最後の記録を出す（正解・状態の帯が消えないように）
+    final PipelineSession? s = r.session ?? r.lastSession;
+    final List<WindowResult> wins = _tail(s == null ? r.recent : s.windows, 120);
     final List<WindowState> states = s == null ? const <WindowState>[] : _tail(s.states, 120);
     final List<TruthMark> truth = s?.truth ?? const <TruthMark>[];
     final WindowResult? last = r.recent.isEmpty ? null : r.recent.last;
