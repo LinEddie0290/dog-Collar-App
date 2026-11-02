@@ -120,7 +120,7 @@ class _TestPageState extends State<TestPage> {
               '活动量 ${last.activity.toStringAsFixed(3)} m/s²　→ ${st == null ? '-' : (st.rest ? '安静（< 0.4）' : '在动')}',
               if (st != null)
                 '心率测量的条件：很安静 ${st.quietS.toStringAsFixed(0)} / 30 秒'
-                    '${st.measureOk ? '　→ 可以测（自动测量是 B，还没做）' : ''}',
+                    '${st.measureOk ? '　→ 可以测' : ''}',
               '结果的时间 ${_clock(last.tMs)}（比现在晚约 15 秒）',
             ],
             if (ag.n > 0)

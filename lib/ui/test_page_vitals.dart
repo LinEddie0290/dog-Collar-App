@@ -34,7 +34,8 @@ class VitalsCard extends StatelessWidget {
     if (r == null) return head + _reason(a.reason);
     if (!a.usable) return '$head${_reason(a.reason ?? 'unusable')}';
     final String rr = r.respirationPerMin == null ? '' : '・呼吸 ${r.respirationPerMin!.round()}';
-    return '$head心率 ${r.heartRateBpm!.round()}$rr（${r.quality.name}）';
+    final String wave = a.rhythmStripFile != null ? '・有波形（测定 → 记录）' : '';
+    return '$head心率 ${r.heartRateBpm!.round()}$rr（${r.quality.name}）$wave';
   }
 
   @override
@@ -56,6 +57,10 @@ class VitalsCard extends StatelessWidget {
     } else {
       status = '等狗安静 30 秒（很安静＝活动量 < 0.15）';
     }
+    final String? use = av.activeSensor;
+    final String? fallback = monitor.running && use != null && use != av.sensor
+        ? '选的 ${sensors[av.sensor]} 没有数据，改用 ${sensors[use] ?? use}'
+        : null;
     return Container(
       key: const ValueKey<String>('vitals-card'),
       margin: const EdgeInsets.only(bottom: 10),
@@ -83,6 +88,7 @@ class VitalsCard extends StatelessWidget {
             ],
           ),
           Text(status, style: const TextStyle(fontSize: 12.5, color: AppColors.textSecondary)),
+          if (fallback != null) Text(fallback, style: const TextStyle(fontSize: 12, color: AppColors.accent)),
           const SizedBox(height: 6),
           Wrap(
             spacing: 6,

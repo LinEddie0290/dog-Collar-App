@@ -37,6 +37,10 @@ class VitalAttempt {
   int samples = 0;
   double? fs;
 
+  /// 履歴に入れたときの波形の画像（相対パス）と記録の id（AttemptHistorySaver が入れる）。
+  String? rhythmStripFile;
+  String? recordId;
+
   double? get heartRateBpm => result?.heartRateBpm;
   double? get respirationPerMin => result?.respirationPerMin;
   bool get usable => result != null && result!.quality != VitalsQuality.unusable && result!.heartRateBpm != null;
@@ -83,6 +87,16 @@ class AutoVitals extends ChangeNotifier {
 
   int get _measureUs => (measureS * 1e6).round();
 
+  /// 実際に使うセンサー。選んだセンサーのデータがなければ、あるほうを使う
+  /// （偽のデータ・Unity は front だけなので、BMI088 を選んでいても測れるように。11-02 iPhone で気づいた）。
+  String? get activeSensor {
+    if (_buf[sensor]?.isNotEmpty ?? false) return sensor;
+    for (final MapEntry<String, ListQueue<_Pt>> e in _buf.entries) {
+      if (e.value.isNotEmpty) return e.key;
+    }
+    return null;
+  }
+
   /// 今の測定の進み（0〜1）。
   double get progress {
     final VitalAttempt? c = current;
@@ -127,9 +141,10 @@ class AutoVitals extends ChangeNotifier {
   /// 手動（記録中）：今から 60 秒。記録していない・データがないなら false。
   bool measureNow() {
     if (current != null) return false;
-    final ListQueue<_Pt>? q = _buf[sensor];
-    if (q == null || q.isEmpty) return false;
-    current = VitalAttempt(trigger: 'manual', sensor: sensor, tStartDevUs: q.last.tUs, tStartMs: q.last.tMs);
+    final String? use = activeSensor;
+    final ListQueue<_Pt>? q = use == null ? null : _buf[use];
+    if (use == null || q == null || q.isEmpty) return false;
+    current = VitalAttempt(trigger: 'manual', sensor: use, tStartDevUs: q.last.tUs, tStartMs: q.last.tMs);
     notifyListeners();
     return true;
   }
@@ -143,7 +158,9 @@ class AutoVitals extends ChangeNotifier {
       return;
     }
     if (c != null || !enabled) return;
-    final int? oldest = _buf[sensor]?.firstOrNull?.tUs;
+    final String? use = activeSensor;
+    if (use == null) return;
+    final int? oldest = _buf[use]?.firstOrNull?.tUs;
     final int coolUntil = _lastDoneUs == null ? -1 << 62 : _lastDoneUs! + cooldown.inMicroseconds;
     for (final WindowState s in states) {
       if (s.tStartDevUs <= _scannedUs) continue;
@@ -151,7 +168,7 @@ class AutoVitals extends ChangeNotifier {
       if (!s.measureOk || s.tStartDevUs < coolUntil) continue;
       if (oldest == null || s.tStartDevUs < oldest) continue; // もう手元にないデータ
       final VitalAttempt a =
-          VitalAttempt(trigger: 'auto', sensor: sensor, tStartDevUs: s.tStartDevUs, tStartMs: s.tStartMs);
+          VitalAttempt(trigger: 'auto', sensor: use, tStartDevUs: s.tStartDevUs, tStartMs: s.tStartMs);
       current = a;
       notifyListeners();
       _checkAuto(a, states);

@@ -14,7 +14,7 @@ import 'state/vitals_session.dart';
 import 'state/continuous_monitor.dart';
 import 'pipeline/auto_vitals.dart';
 import 'pipeline/pipeline_runner.dart';
-import 'data/measurement_record.dart';
+import 'pipeline/auto_vitals_history.dart';
 import 'pipeline/pipeline_store.dart';
 import 'pipeline/pipeline_summary_repository.dart';
 import 'ui/amap_init.dart';
@@ -58,20 +58,12 @@ class _CollarAppState extends State<CollarApp> {
       link: _collarLink,
       blockedReason: () => _monitor.running ? '正在记录：请在测试画面（📊）按「现在测」，不会断开' : null,
     );
-    // 測れた（品質が悪いのも含む）ら、今の測定の履歴にも入れる（D-050 B3）
-    _autoVitals.finishedListeners.add((VitalAttempt a) {
-      final r = a.result;
-      if (a.status != AttemptStatus.done || r == null) return;
-      unawaited(_measurementStore
-          .save(MeasurementRecord.fromResult(
-            startedAt: DateTime.fromMillisecondsSinceEpoch(a.tStartMs),
-            result: r,
-            sampleCount: a.samples,
-            imuRateHz: a.fs?.round(),
-            note: a.trigger == 'auto' ? '自动测量（记录中，安静 30 秒后）・${a.sensor}' : '记录中手动测量・${a.sensor}',
-          ))
-          .catchError((Object _) {}));
-    });
+    // 測れた（品質が悪いのも含む）ら、今の測定の履歴にも入れる（D-050 B3）。波形の画像つき
+    final AttemptHistorySaver saver = AttemptHistorySaver(
+      saveStrip: _measurementStore.saveRhythmStripPng,
+      saveRecord: _measurementStore.save,
+    );
+    _autoVitals.finishedListeners.add((VitalAttempt a) => unawaited(saver.save(a)));
     _monitor = ContinuousMonitor(link: _collarLink, runner: _pipelineRunner, vitals: _vitalsSession);
     _liveSummary = PipelineSummaryRepository(store: _pipelineStore, changes: _pipelineRunner.dataVersion);
     unawaited(_collarLink.loadKnown());

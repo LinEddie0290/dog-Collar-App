@@ -131,6 +131,18 @@ void main() {
     expect(fc.lastFs, closeTo(100, 0.1));
   });
 
+  test('選んだセンサー（BMI088）のデータがない（Unity・偽のデータ）→ 基板の IMU で測る', () {
+    final _FakeCompute fc = _FakeCompute();
+    final AutoVitals av = AutoVitals(compute: fc.call, sensor: 'side');
+    final List<VitalAttempt> done = <VitalAttempt>[];
+    av.finishedListeners.add(done.add);
+    _run(av, 150, (int t) => t >= 30);
+    expect(av.activeSensor, 'front');
+    expect(done.single.sensor, 'front');
+    expect(done.single.status, AttemptStatus.done);
+    expect(fc.calls, 1);
+  });
+
   test('記録（runner）の中で：静止 → 自動で測って、心拍・呼吸の行が残る', () async {
     final WindowClassifier clf = WindowClassifier.fromJson(
         jsonDecode(File('assets/models/cnn_imu_v1.json').readAsStringSync()) as Map<String, dynamic>);
