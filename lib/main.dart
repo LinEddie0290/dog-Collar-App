@@ -12,7 +12,9 @@ import 'state/location_controller.dart';
 import 'state/collar_link.dart';
 import 'state/vitals_session.dart';
 import 'state/continuous_monitor.dart';
+import 'pipeline/auto_vitals.dart';
 import 'pipeline/pipeline_runner.dart';
+import 'data/measurement_record.dart';
 import 'pipeline/pipeline_store.dart';
 import 'pipeline/pipeline_summary_repository.dart';
 import 'ui/amap_init.dart';
@@ -39,7 +41,9 @@ class _CollarAppState extends State<CollarApp> {
   late final VitalsSession _vitalsSession;
   // T34-A：スマホの中の処理の流れ（受けた IMU → 毎日のまとめ）
   final PipelineStore _pipelineStore = PipelineStore();
-  late final PipelineRunner _pipelineRunner = PipelineRunner(store: _pipelineStore);
+  // T34-B：記録の中のデータから心拍を測る（自動・記録中の手動）
+  final AutoVitals _autoVitals = AutoVitals();
+  late final PipelineRunner _pipelineRunner = PipelineRunner(store: _pipelineStore, autoVitals: _autoVitals);
   late final ContinuousMonitor _monitor;
   late final PipelineSummaryRepository _liveSummary;
   bool _amapInitialized = false;
@@ -49,7 +53,25 @@ class _CollarAppState extends State<CollarApp> {
     super.initState();
     _locationController = LocationController(collar: _controller);
     _vitalsSession =
-        VitalsSession(store: _measurementStore, link: _collarLink);
+        VitalsSession(
+      store: _measurementStore,
+      link: _collarLink,
+      blockedReason: () => _monitor.running ? '正在记录：请在测试画面（📊）按「现在测」，不会断开' : null,
+    );
+    // 測れた（品質が悪いのも含む）ら、今の測定の履歴にも入れる（D-050 B3）
+    _autoVitals.finishedListeners.add((VitalAttempt a) {
+      final r = a.result;
+      if (a.status != AttemptStatus.done || r == null) return;
+      unawaited(_measurementStore
+          .save(MeasurementRecord.fromResult(
+            startedAt: DateTime.fromMillisecondsSinceEpoch(a.tStartMs),
+            result: r,
+            sampleCount: a.samples,
+            imuRateHz: a.fs?.round(),
+            note: a.trigger == 'auto' ? '自动测量（记录中，安静 30 秒后）・${a.sensor}' : '记录中手动测量・${a.sensor}',
+          ))
+          .catchError((Object _) {}));
+    });
     _monitor = ContinuousMonitor(link: _collarLink, runner: _pipelineRunner, vitals: _vitalsSession);
     _liveSummary = PipelineSummaryRepository(store: _pipelineStore, changes: _pipelineRunner.dataVersion);
     unawaited(_collarLink.loadKnown());
@@ -64,6 +86,7 @@ class _CollarAppState extends State<CollarApp> {
     _locationController.dispose();
     _monitor.dispose();
     _pipelineRunner.dispose();
+    _autoVitals.dispose();
     _vitalsSession.dispose();
     _collarLink.dispose();
     super.dispose();

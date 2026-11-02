@@ -10,6 +10,7 @@ import '../pipeline/truth_compare.dart';
 import '../state/continuous_monitor.dart';
 import 'app_colors.dart';
 import 'test_page_sessions.dart';
+import 'test_page_vitals.dart';
 
 /// T34-C：テスト画面（開発者向け）。記録中の様子を 1 画面に、1 秒ごとに更新。
 /// 入力・受信（周波数・抜け）・処理・今の状態・最近 2 分の帯・出来事・保存。
@@ -86,6 +87,7 @@ class _TestPageState extends State<TestPage> {
         children: <Widget>[
           _TruthButtons(runner: r),
           SubjectCard(monitor: m),
+          VitalsCard(monitor: m),
           _Section('输入', <String>[
             '${_kindName(m.runningKind ?? m.kind)}　${m.running ? '记录中' : (m.starting ? '连接中…' : '没有在记录')}'
                 '${m.startedAt != null && m.running ? '（${_dur(DateTime.now().difference(m.startedAt!))}）' : ''}',

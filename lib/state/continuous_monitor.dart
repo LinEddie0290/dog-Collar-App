@@ -17,6 +17,7 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../data/ble_collar_data_source.dart';
+import '../pipeline/auto_vitals.dart';
 import '../pipeline/imu_input.dart';
 import '../pipeline/pipeline_runner.dart';
 import '../pipeline/test_subject.dart';
@@ -42,6 +43,8 @@ class ContinuousMonitor extends ChangeNotifier {
   static const String _kUrl = 'monitor.unity_url';
   static const String _kSpeed = 'monitor.fake_speed';
   static const String _kSubject = 'monitor.subject';
+  static const String _kVSensor = 'monitor.vitals_sensor';
+  static const String _kVAuto = 'monitor.auto_vitals';
 
   /// 入力の選び方（F）。止めているときだけ変えられる。
   InputKind kind = InputKind.collar;
@@ -73,6 +76,11 @@ class ContinuousMonitor extends ChangeNotifier {
       fakeSpeed = p.getDouble(_kSpeed) ?? fakeSpeed;
       final String? sj = p.getString(_kSubject);
       if (sj != null) subject = TestSubject.fromJson(jsonDecode(sj) as Map<String, dynamic>);
+      final AutoVitals? av = runner.autoVitals;
+      if (av != null) {
+        av.sensor = p.getString(_kVSensor) ?? av.sensor;
+        av.enabled = p.getBool(_kVAuto) ?? av.enabled;
+      }
       notifyListeners();
     } catch (_) {
       // 読めなくても既定のまま使える
@@ -90,6 +98,22 @@ class ContinuousMonitor extends ChangeNotifier {
       await p.setString(_kKind, this.kind.name);
       await p.setString(_kUrl, this.unityUrl);
       await p.setDouble(_kSpeed, this.fakeSpeed);
+    } catch (_) {
+      // 保存できなくても今回は使える
+    }
+  }
+
+  /// B：心拍を測るセンサー（front＝基板の IMU／side＝BMI088）と、自動のオン・オフ。
+  Future<void> setVitals({String? sensor, bool? enabled}) async {
+    final AutoVitals? av = runner.autoVitals;
+    if (av == null) return;
+    if (sensor != null && av.current == null) av.sensor = sensor;
+    if (enabled != null) av.enabled = enabled;
+    notifyListeners();
+    try {
+      final SharedPreferences p = await SharedPreferences.getInstance();
+      await p.setString(_kVSensor, av.sensor);
+      await p.setBool(_kVAuto, av.enabled);
     } catch (_) {
       // 保存できなくても今回は使える
     }

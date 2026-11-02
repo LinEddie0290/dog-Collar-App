@@ -21,6 +21,7 @@ import 'package:collar_pipeline/collar_pipeline.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart' show rootBundle;
 
+import 'auto_vitals.dart';
 import 'imu_input.dart';
 import 'pipeline_store.dart';
 
@@ -158,10 +159,16 @@ class PipelineRunner extends ChangeNotifier {
     this.dataVersionEvery = const Duration(minutes: 5),
     this.saveRaw = true,
     this.rawFlushRows = 1024,
+    this.autoVitals,
     int Function()? nowMs,
   })  : _loadClassifier = loadClassifier ?? loadBundledClassifier,
         _compute = compute ?? _computeInIsolate,
-        _nowMs = nowMs ?? (() => DateTime.now().millisecondsSinceEpoch);
+        _nowMs = nowMs ?? (() => DateTime.now().millisecondsSinceEpoch) {
+    autoVitals?.finishedListeners.add(_onAttempt);
+  }
+
+  /// B：記録の中のデータから心拍・呼吸を測る（自動と記録中の手動）。null なら測らない。
+  final AutoVitals? autoVitals;
 
   final Future<WindowClassifier> Function() _loadClassifier;
   final ChunkCompute _compute;
@@ -252,6 +259,7 @@ class PipelineRunner extends ChangeNotifier {
   }
 
   PipelineSession startSession() {
+    autoVitals?.reset(); // 首輪の時計が変わる
     final int now = _nowMs();
     final PipelineSession s = PipelineSession('s$now', now);
     _session = s;
@@ -284,6 +292,7 @@ class PipelineRunner extends ChangeNotifier {
     s._buf.add(x);
     s.lastSample = x;
     if (saveRaw && store != null) _rawLine(s, x);
+    autoVitals?.onSample(x);
     samplesIn++;
     if (x.tDevUs > s._latestUs) s._latestUs = x.tDevUs;
     if (!s._busy && s._latestUs - s._processedToUs >= chunkNewS * 1e6 && _spanUs(s) >= _minSpanUs) {
@@ -324,10 +333,10 @@ class PipelineRunner extends ChangeNotifier {
   }
 
   /// 心拍・呼吸の結果を入れる（B の自動測定から）。tDevUs は首輪の時計。
-  void addVital(VitalReading v) {
+  void addVital(VitalReading v, {Map<String, Object?> extra = const <String, Object?>{}}) {
     final PipelineSession s = _session ?? startSession();
     s.vitals.add(v);
-    unawaited(store?.appendVital(s.id, v));
+    unawaited(store?.appendVital(s.id, v, extra: extra));
   }
 
   /// 正解のラベル（その時刻からこの動き）。Unity・偽のデータの答え、D のボタンから。
@@ -379,8 +388,35 @@ class PipelineRunner extends ChangeNotifier {
     return true;
   }
 
+  /// B：測定が終わった → 記録に心拍・呼吸の行（中止・測れなかったときも valid: false で残す、B5）。
+  /// 時刻は 60 秒の真ん中。
+  void _onAttempt(VitalAttempt a) {
+    final PipelineSession? s = _session;
+    if (s == null) return;
+    final int half = (autoVitals!.measureS * 5e5).round();
+    final int tUs = a.tStartDevUs + half;
+    final int tMs = a.tStartMs >= 0 ? a.tStartMs + half ~/ 1000 : -1;
+    final Map<String, Object?> extra = <String, Object?>{
+      'trigger': a.trigger,
+      'sensor': a.sensor,
+      'status': a.status.name,
+      if (a.reason != null) 'reason': a.reason,
+      if (a.result != null) 'quality': a.result!.quality.name,
+      'samples': a.samples,
+      if (a.fs != null) 'fs': double.parse(a.fs!.toStringAsFixed(2)),
+    };
+    final bool ok = a.usable;
+    addVital(VitalReading(tMs: tMs, tDevUs: tUs, kind: 'hr', value: a.heartRateBpm, valid: ok), extra: extra);
+    final double? rr = a.respirationPerMin;
+    if (a.result != null) {
+      addVital(VitalReading(tMs: tMs, tDevUs: tUs, kind: 'rr', value: rr, valid: ok && rr != null), extra: extra);
+    }
+    notifyListeners();
+  }
+
   /// 残りを全部計算して、このセッションを閉じる。
   Future<void> flush() {
+    autoVitals?.reset(); // 測っている途中なら中止（session_end）として今のセッションに残す
     final PipelineSession? s = _session;
     _session = null;
     if (s == null) return _chain;
@@ -492,6 +528,7 @@ class PipelineRunner extends ChangeNotifier {
     final EventsSnapshot r = computeEvents(s.windows, s.vitals, cfg: cfg, ecfg: ecfg);
     s.states = r.states;
     s.events = r.events;
+    if (identical(s, _session)) autoVitals?.onStates(s.states);
   }
 
   @override

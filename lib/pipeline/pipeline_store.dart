@@ -84,13 +84,16 @@ class PipelineStore {
         'prob': <double>[for (final WindowResult x in w) _r(x.prob, 1e4)],
       });
 
-  Future<void> appendVital(String id, VitalReading v) => _append(id, <String, Object?>{
+  /// extra：B の自動測定の trigger・sensor・status・reason・quality など。
+  Future<void> appendVital(String id, VitalReading v, {Map<String, Object?> extra = const <String, Object?>{}}) =>
+      _append(id, <String, Object?>{
         'rec': 'vital',
         't_ms': v.tMs,
         't_us': v.tDevUs,
         'kind': v.kind,
         'value': v.value,
         'valid': v.valid,
+        ...extra,
       });
 
   Future<void> appendTruth(String id, TruthMark m) => _append(id, <String, Object?>{

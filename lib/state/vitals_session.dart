@@ -49,9 +49,14 @@ class VitalsSession extends ChangeNotifier {
     this.waveSeconds = 5.0,
     this.liveMinSeconds = 8.0,
     this.maxDuration = const Duration(minutes: 10),
+    this.blockedReason,
   });
 
   final MeasurementStore store;
+
+  /// T34-B：記録中（ContinuousMonitor）はここで測らない（終わりで接続を切って記録が止まるため）。
+  /// 理由の文を返せば止める。記録中はテスト画面の「现在测」で、同じデータから測る。
+  final String? Function()? blockedReason;
 
   /// The connection is owned elsewhere and outlives a measurement, so several
   /// measurements can run over one link without re-scanning.
@@ -172,6 +177,12 @@ class VitalsSession extends ChangeNotifier {
   /// ここでは持たない。二重に持つと片方だけ取り残される。
   Future<void> start({String? remoteId}) async {
     if (isBusy) return;
+    final String? blocked = blockedReason?.call();
+    if (blocked != null) {
+      errorMessage = blocked;
+      notifyListeners();
+      return;
+    }
     _reset();
     errorMessage = null;
     phase = SessionPhase.preparing;
