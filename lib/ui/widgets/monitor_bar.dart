@@ -8,7 +8,7 @@ import '../../state/continuous_monitor.dart';
 import '../app_colors.dart';
 import '../test_page.dart';
 
-/// T34-A・F：「每天」のページの上の記録バー。入力の選び方（项圈／Unity／模拟）、開始・停止、
+/// T34-A・F：記録バー（「我的 → 开发 → 记录・测试」の画面に出す。前は「每天」の上）。入力の選び方（项圈／Unity／模拟）、開始・停止、
 /// 今の処理の様子。文言は暫定で中国語直書き（デザインと 3 言語はあとで）。
 /// 詳しい数字は C のテスト画面に出す。
 class MonitorBar extends StatelessWidget {

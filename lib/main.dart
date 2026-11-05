@@ -56,7 +56,7 @@ class _CollarAppState extends State<CollarApp> {
         VitalsSession(
       store: _measurementStore,
       link: _collarLink,
-      blockedReason: () => _monitor.running ? '正在记录：请在测试画面（📊）按「现在测」，不会断开' : null,
+      blockedReason: () => _monitor.running ? '正在记录：请在「我的 → 开发 → 记录・测试」的测试画面（📊）按「现在测」，不会断开' : null,
     );
     // 測れた（品質が悪いのも含む）ら、今の測定の履歴にも入れる（D-050 B3）。波形の画像つき
     final AttemptHistorySaver saver = AttemptHistorySaver(

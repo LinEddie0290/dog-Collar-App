@@ -1,171 +1,45 @@
-import 'package:collar_data/collar_data.dart';
 import 'package:flutter/material.dart';
 
 import '../l10n/app_language.dart';
 import '../l10n/app_strings.dart';
-import '../state/collar_controller.dart';
+import '../state/continuous_monitor.dart';
 import '../state/locale_controller.dart';
 import 'app_colors.dart';
 import 'cnn_bench_page.dart';
+import 'recording_page.dart';
 
-class SettingsPage extends StatefulWidget {
+/// 「我的」タブ（T35）：言語・データ・开发。
+/// 古い「模拟／WebSocket で接続」と、値が出ていなかった「项圈」の欄は消した（T35 整理）。
+/// 首輪の選択・接続は「测定」タブから。
+class SettingsPage extends StatelessWidget {
   const SettingsPage({
     super.key,
-    required this.controller,
     required this.localeController,
+    this.monitor,
   });
 
-  final CollarController controller;
   final LocaleController localeController;
 
-  @override
-  State<SettingsPage> createState() => _SettingsPageState();
-}
-
-class _SettingsPageState extends State<SettingsPage> {
-  late final TextEditingController _urlController;
-
-  @override
-  void initState() {
-    super.initState();
-    _urlController = TextEditingController(text: widget.controller.url);
-  }
-
-  @override
-  void dispose() {
-    _urlController.dispose();
-    super.dispose();
-  }
+  /// T34：記録・テスト。null なら开发に出さない。
+  final ContinuousMonitor? monitor;
 
   @override
   Widget build(BuildContext context) {
     final AppStrings strings = AppStringsScope.of(context);
 
     return AnimatedBuilder(
-      animation: Listenable.merge(<Listenable>[widget.controller, widget.localeController]),
+      animation: localeController,
       builder: (BuildContext context, Widget? _) {
-        final CollarController controller = widget.controller;
-        final bool busy = controller.status == ConnStatus.connecting ||
-            controller.status == ConnStatus.reconnecting;
-
         return SafeArea(
           child: ListView(
             padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
             children: <Widget>[
               Text(
-                strings.settingsTitle,
+                strings.navMine,
                 style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                       fontWeight: FontWeight.w600,
                       fontStyle: FontStyle.italic,
                     ),
-              ),
-              const SizedBox(height: 20),
-              _SectionLabel(strings.connectionSection),
-              const SizedBox(height: 8),
-              _SectionCard(
-                children: <Widget>[
-                  _SettingsRow(
-                    child: Row(
-                      children: <Widget>[
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: <Widget>[
-                              Text(
-                                strings.useMockToggleTitle,
-                                style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700),
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
-                                strings.useMockToggleSubtitle,
-                                style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
-                              ),
-                            ],
-                          ),
-                        ),
-                        Switch(
-                          value: controller.useMock,
-                          activeTrackColor: AppColors.accent,
-                          onChanged: controller.isConnected
-                              ? null
-                              : controller.setUseMock,
-                        ),
-                      ],
-                    ),
-                  ),
-                  _SettingsRow(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: <Widget>[
-                        Text(
-                          strings.urlFieldLabel,
-                          style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700),
-                        ),
-                        const SizedBox(height: 6),
-                        TextField(
-                          controller: _urlController,
-                          enabled: !controller.useMock && !controller.isConnected,
-                          style: const TextStyle(fontSize: 12.5, fontFamily: 'monospace'),
-                          decoration: InputDecoration(
-                            isDense: true,
-                            contentPadding:
-                                const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                              borderSide: const BorderSide(color: AppColors.border),
-                            ),
-                            hintText: 'ws://192.168.x.x:8080/ws',
-                          ),
-                          onChanged: controller.setUrl,
-                        ),
-                      ],
-                    ),
-                  ),
-                  _SettingsRow(
-                    last: true,
-                    child: Row(
-                      children: <Widget>[
-                        Expanded(
-                          child: Text(strings.statusLabel, style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700)),
-                        ),
-                        _StatusChip(status: controller.status, strings: strings),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              Row(
-                children: <Widget>[
-                  Expanded(
-                    child: FilledButton(
-                      style: FilledButton.styleFrom(
-                        backgroundColor: AppColors.accent,
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                      ),
-                      onPressed: (controller.isConnected || busy)
-                          ? null
-                          : () => controller.connect(),
-                      child: Text(strings.connectButton),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: OutlinedButton(
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: AppColors.textPrimary,
-                        side: const BorderSide(color: AppColors.border),
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                      ),
-                      onPressed: (!controller.isConnected && !busy)
-                          ? null
-                          : () => controller.disconnect(),
-                      child: Text(strings.disconnectButton),
-                    ),
-                  ),
-                ],
               ),
               const SizedBox(height: 20),
               _SectionLabel(strings.languageSection),
@@ -176,7 +50,7 @@ class _SettingsPageState extends State<SettingsPage> {
                     _SettingsRow(
                       last: lang == AppLanguage.values.last,
                       child: InkWell(
-                        onTap: () => widget.localeController.setLanguage(lang),
+                        onTap: () => localeController.setLanguage(lang),
                         child: Row(
                           children: <Widget>[
                             Expanded(
@@ -185,22 +59,12 @@ class _SettingsPageState extends State<SettingsPage> {
                                 style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700),
                               ),
                             ),
-                            if (lang == widget.localeController.language)
+                            if (lang == localeController.language)
                               const Icon(Icons.check, size: 18, color: AppColors.accent),
                           ],
                         ),
                       ),
                     ),
-                ],
-              ),
-              const SizedBox(height: 20),
-              _SectionLabel(strings.collarSection),
-              const SizedBox(height: 8),
-              _SectionCard(
-                children: <Widget>[
-                  _SettingsRow(child: _KeyValueRow(label: strings.nameLabel, value: strings.collarNameValue)),
-                  _SettingsRow(child: _KeyValueRow(label: strings.batteryLabel, value: '--')),
-                  _SettingsRow(last: true, child: _KeyValueRow(label: strings.firmwareLabel, value: '--')),
                 ],
               ),
               const SizedBox(height: 20),
@@ -241,27 +105,30 @@ class _SettingsPageState extends State<SettingsPage> {
                 ],
               ),
               const SizedBox(height: 20),
-              // T24：開発用。CNN の推理速度を測る（文言は中国語だけ、T16 で整理）。
+              // 开发：記録・テスト画面（T34）と CNN の推理速度（T24）。文言は中国語だけ（T16 で整理）。
               const _SectionLabel('开发'),
               const SizedBox(height: 8),
               _SectionCard(
                 children: <Widget>[
+                  if (monitor != null)
+                    _SettingsRow(
+                      child: _LinkRow(
+                        key: const ValueKey<String>('open-recording'),
+                        icon: Icons.fiber_manual_record_outlined,
+                        title: '记录・测试（T34）',
+                        onTap: () => Navigator.of(context).push(
+                          MaterialPageRoute<void>(builder: (BuildContext _) => RecordingPage(monitor: monitor!)),
+                        ),
+                      ),
+                    ),
                   _SettingsRow(
                     last: true,
-                    child: InkWell(
+                    child: _LinkRow(
                       key: const ValueKey<String>('open-cnn-bench'),
+                      icon: Icons.speed,
+                      title: '推理速度（T24）',
                       onTap: () => Navigator.of(context).push(
                         MaterialPageRoute<void>(builder: (BuildContext _) => const CnnBenchPage()),
-                      ),
-                      child: const Row(
-                        children: <Widget>[
-                          Icon(Icons.speed, size: 16, color: AppColors.textSecondary),
-                          SizedBox(width: 10),
-                          Expanded(
-                            child: Text('推理速度（T24）', style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700)),
-                          ),
-                          Icon(Icons.chevron_right, size: 18, color: AppColors.textFaint),
-                        ],
                       ),
                     ),
                   ),
@@ -281,6 +148,31 @@ class _SettingsPageState extends State<SettingsPage> {
           ),
         );
       },
+    );
+  }
+}
+
+class _LinkRow extends StatelessWidget {
+  const _LinkRow({super.key, required this.icon, required this.title, required this.onTap});
+
+  final IconData icon;
+  final String title;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      child: Row(
+        children: <Widget>[
+          Icon(icon, size: 16, color: AppColors.textSecondary),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(title, style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700)),
+          ),
+          const Icon(Icons.chevron_right, size: 18, color: AppColors.textFaint),
+        ],
+      ),
     );
   }
 }
@@ -341,53 +233,6 @@ class _SettingsRow extends StatelessWidget {
             : const Border(bottom: BorderSide(color: AppColors.divider)),
       ),
       child: child,
-    );
-  }
-}
-
-class _KeyValueRow extends StatelessWidget {
-  const _KeyValueRow({required this.label, required this.value});
-
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: <Widget>[
-        Expanded(
-          child: Text(label, style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700)),
-        ),
-        Text(value, style: const TextStyle(fontSize: 13, color: AppColors.textSecondary)),
-      ],
-    );
-  }
-}
-
-class _StatusChip extends StatelessWidget {
-  const _StatusChip({required this.status, required this.strings});
-
-  final ConnStatus status;
-  final AppStrings strings;
-
-  @override
-  Widget build(BuildContext context) {
-    final Color color =
-        status == ConnStatus.connected ? AppColors.connected : AppColors.textFaint;
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: <Widget>[
-        Container(
-          width: 7,
-          height: 7,
-          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-        ),
-        const SizedBox(width: 6),
-        Text(
-          strings.connStatusLabel(status),
-          style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: color),
-        ),
-      ],
     );
   }
 }

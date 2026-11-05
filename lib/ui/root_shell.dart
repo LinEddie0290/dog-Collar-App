@@ -1,21 +1,20 @@
 import 'package:flutter/material.dart';
 
+import '../data/daily_summary.dart';
 import '../l10n/app_strings.dart';
 import '../state/collar_controller.dart';
+import '../state/collar_link.dart';
+import '../state/continuous_monitor.dart';
 import '../state/locale_controller.dart';
 import '../state/location_controller.dart';
-import '../state/collar_link.dart';
-import '../data/daily_summary.dart';
-import '../state/continuous_monitor.dart';
 import '../state/vitals_session.dart';
-import 'history_page.dart';
-import 'measure_page.dart';
 import 'daily_summary_page.dart';
-import 'home_page.dart';
 import 'map_page.dart';
+import 'measure_page.dart';
 import 'settings_page.dart';
-import 'widgets/monitor_bar.dart';
+import 'today_page.dart';
 
+/// 下のタブ（T35・D-051）：今天・健康・测定・安全・我的。
 class RootShell extends StatefulWidget {
   const RootShell({
     super.key,
@@ -28,6 +27,7 @@ class RootShell extends StatefulWidget {
     this.liveSummary,
   });
 
+  /// 古いつなぎ方。今は地図（安全）の位置のためだけに残している（T12 で本物の GPS に替えるときに消す）。
   final CollarController controller;
   final LocaleController localeController;
   final LocationController locationController;
@@ -50,23 +50,21 @@ class _RootShellState extends State<RootShell> {
     final AppStrings strings = AppStringsScope.of(context);
 
     final List<Widget> pages = <Widget>[
-      HomePage(controller: widget.controller),
-      // T23 デモ：パイプラインの 1日まとめ(每天看・提醒)。T16 で完成させる。
-      DailySummaryPage(
-        live: widget.liveSummary,
-        header: widget.monitor == null ? null : MonitorBar(monitor: widget.monitor!),
-      ),
-      MapPage(controller: widget.controller, locationController: widget.locationController),
-      // 「首輪」と「記録」は測定画面から開く。タブを増やしすぎると
-      // 下部ナビのラベルが潰れるため。
+      // 今天：白い水のホーム（T35）
+      TodayPage(live: widget.liveSummary, monitor: widget.monitor, link: widget.collarLink),
+      // 健康：今はパイプラインの 1 日まとめ。T35 で健康タブに作り直す
+      DailySummaryPage(live: widget.liveSummary),
+      // 测定：手動の心拍測定。「首輪」と「記録」はこの画面から開く
       MeasurePage(
         session: widget.vitalsSession,
         link: widget.collarLink,
       ),
-      HistoryPage(controller: widget.controller),
+      // 安全：地図（位置は T12 で本物に替える）
+      MapPage(controller: widget.controller, locationController: widget.locationController),
+      // 我的：言語・データ・开发（記録・テスト画面、CNN の速さ）
       SettingsPage(
-        controller: widget.controller,
         localeController: widget.localeController,
+        monitor: widget.monitor,
       ),
     ];
 
@@ -79,15 +77,11 @@ class _RootShellState extends State<RootShell> {
         selectedIndex: _index,
         onDestinationSelected: (int i) => setState(() => _index = i),
         destinations: <NavigationDestination>[
-          NavigationDestination(icon: const Icon(Icons.home), label: strings.navHome),
-          // 文言は暫定で中国語直書き(T23 D2)。3言語は T16。
-          const NavigationDestination(icon: Icon(Icons.today_outlined), label: '每天'),
-          NavigationDestination(icon: const Icon(Icons.map_outlined), label: strings.navMap),
-          // 文言は暫定で日本語直書き。3言語対応は app_strings への追加が必要。
-          const NavigationDestination(
-              icon: Icon(Icons.favorite_outline), label: '測定'),
-          NavigationDestination(icon: const Icon(Icons.history), label: strings.navHistory),
-          NavigationDestination(icon: const Icon(Icons.settings), label: strings.navSettings),
+          NavigationDestination(icon: const Icon(Icons.wb_sunny_outlined), label: strings.navToday),
+          NavigationDestination(icon: const Icon(Icons.favorite_outline), label: strings.navHealth),
+          NavigationDestination(icon: const Icon(Icons.monitor_heart_outlined), label: strings.navMeasure),
+          NavigationDestination(icon: const Icon(Icons.shield_outlined), label: strings.navSafety),
+          NavigationDestination(icon: const Icon(Icons.person_outline), label: strings.navMine),
         ],
       ),
     );

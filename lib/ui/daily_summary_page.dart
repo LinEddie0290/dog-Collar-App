@@ -10,14 +10,13 @@ import 'widgets/sparkline.dart';
 /// 日を前後に動かせる。提醒は黄色(notice)。赤は使わない(診断ではないので)。
 ///
 /// T34-A：[live] を渡すと本物のデータ（スマホで計算した結果）を出し、デモと切り替えられる。
-/// [header] はページの一番上に出す（記録の開始・停止のバー）。
+/// 記録の開始・停止のバーは「我的 → 开发 → 记录・测试」に移した（T35）。
 class DailySummaryPage extends StatefulWidget {
-  DailySummaryPage({super.key, DemoSummaryRepository? repository, this.live, this.header})
+  DailySummaryPage({super.key, DemoSummaryRepository? repository, this.live})
       : repository = repository ?? DemoSummaryRepository();
 
   final DemoSummaryRepository repository;
   final SummarySource? live;
-  final Widget? header;
 
   @override
   State<DailySummaryPage> createState() => _DailySummaryPageState();
@@ -55,11 +54,10 @@ class _DailySummaryPageState extends State<DailySummaryPage> {
     });
   }
 
-  /// 本物のデータがあるときだけ：記録のバーと「实际／演示」の切り替え。
+  /// 本物のデータがあるときだけ：「实际／演示」の切り替え。
   List<Widget> _top() {
     if (widget.live == null) return const <Widget>[];
     return <Widget>[
-      if (widget.header != null) ...<Widget>[widget.header!, const SizedBox(height: 8)],
       Row(
         children: <Widget>[
           SegmentedButton<bool>(
