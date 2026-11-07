@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 
+import '../data/daily_summary.dart';
 import '../l10n/app_language.dart';
 import '../l10n/app_strings.dart';
 import '../state/continuous_monitor.dart';
 import '../state/locale_controller.dart';
 import 'app_colors.dart';
 import 'cnn_bench_page.dart';
+import 'daily_summary_page.dart';
 import 'recording_page.dart';
 
 /// 「我的」タブ（T35）：言語・データ・开发。
@@ -16,9 +18,13 @@ class SettingsPage extends StatelessWidget {
     super.key,
     required this.localeController,
     this.monitor,
+    this.liveSummary,
   });
 
   final LocaleController localeController;
+
+  /// 本物の 1 日まとめ。「每天（旧）」で使う。null なら出さない。
+  final SummarySource? liveSummary;
 
   /// T34：記録・テスト。null なら开发に出さない。
   final ContinuousMonitor? monitor;
@@ -105,7 +111,7 @@ class SettingsPage extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 20),
-              // 开发：記録・テスト画面（T34）と CNN の推理速度（T24）。文言は中国語だけ（T16 で整理）。
+              // 开发：記録・テスト画面（T34）、每天（旧：生の数字を見る）、CNN の推理速度（T24）。文言は中国語だけ（T16 で整理）。
               const _SectionLabel('开发'),
               const SizedBox(height: 8),
               _SectionCard(
@@ -118,6 +124,22 @@ class SettingsPage extends StatelessWidget {
                         title: '记录・测试（T34）',
                         onTap: () => Navigator.of(context).push(
                           MaterialPageRoute<void>(builder: (BuildContext _) => RecordingPage(monitor: monitor!)),
+                        ),
+                      ),
+                    ),
+                  if (liveSummary != null)
+                    _SettingsRow(
+                      child: _LinkRow(
+                        key: const ValueKey<String>('open-daily-old'),
+                        icon: Icons.today_outlined,
+                        title: '每天（旧：原始数字，T34）',
+                        onTap: () => Navigator.of(context).push(
+                          MaterialPageRoute<void>(
+                            builder: (BuildContext _) => Scaffold(
+                              appBar: AppBar(title: const Text('每天（旧）')),
+                              body: DailySummaryPage(live: liveSummary),
+                            ),
+                          ),
                         ),
                       ),
                     ),

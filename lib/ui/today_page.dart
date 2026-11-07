@@ -8,6 +8,7 @@ import '../data/home_snapshot.dart';
 import '../l10n/summary_text.dart';
 import '../state/collar_link.dart';
 import '../state/continuous_monitor.dart';
+import 'health/board_page.dart';
 import 'home/board_sheet.dart';
 import 'home/water_background.dart';
 import 'home/water_bubble.dart';
@@ -19,7 +20,7 @@ import 'recording_page.dart';
 /// 真ん中＝今の状態（押すと 记录・测试）、まわりに六大板块の泡（押すと波紋と簡単な詳細）、下に今日の提醒。
 /// 画面イメージ：首輪開発計画/03_設計メモ/T35_画面イメージ/ホーム画面イメージ_v1_白。文言は中国語だけ。
 class TodayPage extends StatefulWidget {
-  const TodayPage({super.key, this.live, this.monitor, this.link, this.clock = DateTime.now});
+  const TodayPage({super.key, this.live, this.monitor, this.link, this.clock = DateTime.now, this.onOpenEcg});
 
   /// 本物の 1 日まとめ（スマホで計算した結果）。null なら本物はない。
   final SummarySource? live;
@@ -29,6 +30,9 @@ class TodayPage extends StatefulWidget {
   final CollarLink? link;
   final DateTime Function() clock;
 
+  /// 板块のページの「像心电图的波形」から「测定」の記録を開く。
+  final VoidCallback? onOpenEcg;
+
   @override
   State<TodayPage> createState() => _TodayPageState();
 }
@@ -37,7 +41,7 @@ class _TodayPageState extends State<TodayPage> {
   static const SummaryTextZh _t = SummaryTextZh();
   final GlobalKey<WaterRipplesState> _ripples = GlobalKey<WaterRipplesState>();
 
-  DailySummary? _real;
+  SummaryBundle? _bundle;
   bool _demo = false;
   int _loadNo = 0;
 
@@ -64,24 +68,41 @@ class _TodayPageState extends State<TodayPage> {
     super.dispose();
   }
 
-  /// 今日の本物の 1 日まとめを読む。読めなければ「本物なし」（落とさない）。古い読み込みの結果は捨てる。
+  /// 本物の 1 日まとめを読む。読めなければ「本物なし」（落とさない）。古い読み込みの結果は捨てる。
   Future<void> _load() async {
     final int no = ++_loadNo;
     final SummarySource? live = widget.live;
-    DailySummary? found;
+    SummaryBundle? b;
     if (live != null) {
       try {
-        final SummaryBundle b = await live.load();
-        final String today = todayKey(widget.clock());
-        for (final DayEntry d in b.days) {
-          if (d.date == today) found = d.summary;
-        }
+        b = await live.load();
       } catch (_) {
-        found = null;
+        b = null;
       }
     }
     if (!mounted || no != _loadNo) return;
-    setState(() => _real = found);
+    setState(() => _bundle = b);
+  }
+
+  /// [today] の 1 日まとめ（なければ null）。
+  DailySummary? _summaryOn(String today) {
+    for (final DayEntry d in _bundle?.days ?? const <DayEntry>[]) {
+      if (d.date == today) return d.summary;
+    }
+    return null;
+  }
+
+  /// 「查看更多」：その板块のページ（健康タブと同じもの）。
+  void _openBoard(Board board) {
+    Navigator.of(context).push(MaterialPageRoute<void>(
+      builder: (BuildContext _) => BoardPage(
+        board: board,
+        today: todayKey(widget.clock()),
+        real: _bundle,
+        demoAll: _demo,
+        onOpenEcg: widget.onOpenEcg,
+      ),
+    ));
   }
 
   NowLine _nowLine() {
@@ -112,7 +133,8 @@ class _TodayPageState extends State<TodayPage> {
         animation: Listenable.merge(ls),
         builder: (BuildContext context, Widget? _) {
           final DateTime now = widget.clock();
-          final HomeSnapshot snap = buildHomeSnapshot(date: todayKey(now), real: _real, demoAll: _demo);
+          final String today = todayKey(now);
+          final HomeSnapshot snap = buildHomeSnapshot(date: today, real: _summaryOn(today), demoAll: _demo);
           return SingleChildScrollView(
             key: const ValueKey<String>('today-page'),
             padding: const EdgeInsets.only(top: 12, bottom: 24),
@@ -148,7 +170,7 @@ class _TodayPageState extends State<TodayPage> {
                     now: _nowLine(),
                     footer: _t.alertsToday(snap.alerts.length),
                     ripples: _ripples,
-                    onBubble: (BubbleData b) => showBoardSheet(context, b),
+                    onBubble: (BubbleData b) => showBoardSheet(context, b, onMore: () => _openBoard(b.board)),
                     onCore: _openRecording,
                   ),
                 ),

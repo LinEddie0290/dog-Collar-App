@@ -12,6 +12,10 @@ import 'package:collar_pipeline/collar_pipeline.dart';
 import '../l10n/summary_text.dart';
 import 'daily_summary.dart';
 import 'health_items.dart';
+import 'health_series.dart';
+import 'item_specs.dart';
+
+export 'health_series.dart' show noDataValue;
 
 class BubbleData {
   const BubbleData({required this.board, required this.value, required this.demo, this.alert});
@@ -47,8 +51,6 @@ class HomeSnapshot {
   /// 提醒のある泡（[Board] の順）。
   List<BubbleData> get alerts => bubbles.where((BubbleData b) => b.alert != null).toList();
 }
-
-const String noDataValue = '没有数据';
 
 /// 今日の日付（1 日まとめと同じ数え方：UTC＋[DailyConfig.tzOffsetHours]）。
 String todayKey(DateTime now, {DailyConfig cfg = const DailyConfig()}) =>
@@ -105,42 +107,20 @@ HomeSnapshot buildHomeSnapshot({required String date, DailySummary? real, bool d
   );
 }
 
-/// 示例の泡。日付と板块から決まる（同じ日なら何度作っても同じ）。7 日に 1 回くらい提醒が出る。
+/// 示例の泡。値は健康タブの示例と同じ（板块の代表の項目、health_series.dart）。
+/// 同じ日なら何度作っても同じ。7 日に 1 回くらい提醒が出る。
 BubbleData demoBubble(String date, Board b) {
-  final int h = _hash('$date/${b.name}');
-  final bool alert = h % 7 == 0;
-  switch (b) {
-    case Board.exercise:
-      final int m = 25 + (h >> 3) % 50;
-      return BubbleData(board: b, value: '$m 分钟', demo: true, alert: alert ? '今天运动比平时少很多' : null);
-    case Board.sleep:
-      final double hours = 8 + ((h >> 3) % 25) / 10;
-      return BubbleData(
-          board: b, value: '${hours.toStringAsFixed(1)} 小时', demo: true, alert: alert ? '昨晚睡得比平时少' : null);
-    case Board.physio:
-      final int hr = 70 + (h >> 3) % 25;
-      return BubbleData(board: b, value: '心率 $hr', demo: true, alert: alert ? '安静时心率比平时高' : null);
-    case Board.skin:
-      final int n = (h >> 3) % 6;
-      return BubbleData(board: b, value: '挠 $n 次', demo: true, alert: alert ? '今天挠和舔比平时多很多' : null);
-    case Board.mind:
-      const List<String> lv = <String>['少', '一般', '多'];
-      return BubbleData(
-          board: b, value: '吠叫 ${lv[(h >> 3) % 3]}', demo: true, alert: alert ? '今天叫得比平时多' : null);
-    case Board.diet:
-      final int n = 4 + (h >> 3) % 6;
-      return BubbleData(board: b, value: '喝水 $n 次', demo: true, alert: alert ? '喝水比平时少约 20%，留意一下水碗' : null);
-  }
-}
-
-/// FNV-1a（32 bit）。Dart の hashCode は実行ごとに変わることがあるので使わない。
-int _hash(String s) {
-  int h = 0x811c9dc5;
-  for (final int c in s.codeUnits) {
-    h ^= c;
-    h = (h * 0x01000193) & 0xffffffff;
-  }
-  return h;
+  final String lead = boardInfo(b).lead;
+  final String n = demoValue(date, lead).toStringAsFixed(itemSpec(lead).decimals);
+  final String value = switch (b) {
+    Board.exercise => '$n 分钟',
+    Board.sleep => '$n 小时',
+    Board.physio => '心率 $n',
+    Board.skin => '挠 $n 次',
+    Board.mind => '吠叫 $n 次',
+    Board.diet => '喝水 $n 次',
+  };
+  return BubbleData(board: b, value: value, demo: true, alert: demoAlertOn(date, b) ? demoAlertText(b) : null);
 }
 
 /// 真ん中のボタンの文。

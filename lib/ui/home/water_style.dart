@@ -49,3 +49,11 @@ IconData boardIcon(Board b) => switch (b) {
       Board.mind => Icons.graphic_eq,
       Board.diet => Icons.rice_bowl_outlined,
     };
+
+/// 白いガラスのカード（健康タブ・ホームの下のカード）。
+BoxDecoration glassCard({double radius = 20}) => BoxDecoration(
+      color: WaterColors.card,
+      border: Border.all(color: WaterColors.line),
+      borderRadius: BorderRadius.circular(radius),
+      boxShadow: const <BoxShadow>[BoxShadow(color: Color(0x1428789F), blurRadius: 18, offset: Offset(0, 6))],
+    );

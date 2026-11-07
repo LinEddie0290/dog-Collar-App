@@ -21,7 +21,7 @@ class RecordingPage extends StatelessWidget {
           MonitorBar(monitor: monitor),
           const SizedBox(height: 12),
           const Text(
-            '记录中的结果在「今天」和「健康」里看（「健康」选「实际」）。📊 打开测试画面（正确答案的按钮・导出等）。',
+            '记录中的结果在「今天」和「健康」里看（原始数字在「我的 → 开发 → 每天（旧）」）。📊 打开测试画面（正确答案的按钮・导出等）。',
             style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
           ),
         ],

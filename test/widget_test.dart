@@ -23,8 +23,15 @@ void main() {
     // 古いタブは無い
     expect(find.text('ホーム'), findsNothing);
     expect(find.text('履歴'), findsNothing);
-    // 最初は「今天」（仮の画面）
+    // 最初は「今天」
     expect(find.byKey(const ValueKey<String>('today-page')), findsOneWidget);
+
+    // 健康タブ：六大板块の一覧
+    await tester.tap(find.text('健康'));
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 1));
+    expect(find.byKey(const ValueKey<String>('health-page')), findsOneWidget);
+    expect(find.byKey(const ValueKey<String>('board-card-exercise')), findsOneWidget);
   });
 
   // IndexedStack は隠れているタブのアニメーションも動かし続ける（健康の「読み込み中」のくるくるなど。
@@ -41,6 +48,7 @@ void main() {
     final Finder open = find.byKey(const ValueKey<String>('open-recording'));
     await tester.scrollUntilVisible(open, 200, scrollable: find.byType(Scrollable).first);
     expect(find.byKey(const ValueKey<String>('open-cnn-bench')), findsOneWidget);
+    expect(find.byKey(const ValueKey<String>('open-daily-old')), findsOneWidget);
     await tester.tap(open);
     await tester.pump();
     await tester.pump(const Duration(seconds: 1));

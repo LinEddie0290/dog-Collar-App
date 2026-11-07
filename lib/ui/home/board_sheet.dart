@@ -8,20 +8,22 @@ import '../../data/health_items.dart';
 import '../../data/home_snapshot.dart';
 import 'water_style.dart';
 
-Future<void> showBoardSheet(BuildContext context, BubbleData data) {
+/// [onMore] があれば「查看更多」ボタン（シートを閉じてから呼ぶ）。
+Future<void> showBoardSheet(BuildContext context, BubbleData data, {VoidCallback? onMore}) {
   return showModalBottomSheet<void>(
     context: context,
     showDragHandle: true,
     backgroundColor: Colors.white,
     shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(28))),
-    builder: (BuildContext _) => BoardSheet(data: data),
+    builder: (BuildContext _) => BoardSheet(data: data, onMore: onMore),
   );
 }
 
 class BoardSheet extends StatelessWidget {
-  const BoardSheet({super.key, required this.data});
+  const BoardSheet({super.key, required this.data, this.onMore});
 
   final BubbleData data;
+  final VoidCallback? onMore;
 
   @override
   Widget build(BuildContext context) {
@@ -91,6 +93,21 @@ class BoardSheet extends StatelessWidget {
                   ],
                 ),
               ),
+            if (onMore != null) ...<Widget>[
+              const SizedBox(height: 8),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton(
+                  key: const ValueKey<String>('board-sheet-more'),
+                  style: FilledButton.styleFrom(backgroundColor: c),
+                  onPressed: () {
+                    Navigator.of(context).pop();
+                    onMore!();
+                  },
+                  child: const Text('查看更多'),
+                ),
+              ),
+            ],
             const SizedBox(height: 10),
             const Text('这不是诊断。如果担心，请问兽医。', style: TextStyle(fontSize: 11, color: WaterColors.sub)),
           ],

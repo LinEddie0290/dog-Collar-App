@@ -119,6 +119,7 @@ class HistoryDay {
     this.sleepMin,
     this.itchCount,
     this.restHr,
+    this.restRr,
   });
 
   final String date;
@@ -127,6 +128,9 @@ class HistoryDay {
   final double? sleepMin;
   final double? itchCount;
   final double? restHr;
+
+  /// T35：安静時の呼吸（history の rest_rr）。
+  final double? restRr;
 
   static HistoryDay fromJson(Map<String, dynamic> json) {
     double? d(String k) => (json[k] as num?)?.toDouble();
@@ -137,6 +141,7 @@ class HistoryDay {
       sleepMin: d('sleep_min'),
       itchCount: d('itch_count'),
       restHr: d('rest_hr'),
+      restRr: d('rest_rr'),
     );
   }
 }

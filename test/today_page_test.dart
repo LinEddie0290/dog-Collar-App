@@ -157,6 +157,20 @@ void main() {
     expect(_key('board-sheet-sleep'), findsNothing);
   });
 
+  testWidgets('泡の詳細の「查看更多」→ その板块のページ（健康タブと同じ）', (WidgetTester tester) async {
+    await tester.pumpWidget(_app(TodayPage(live: _FakeSource(<DayEntry>[_day('2026-11-05')]), clock: _clock)));
+    await tester.pumpAndSettle();
+    await tester.tap(_key('bubble-exercise'));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(_key('board-sheet-more')); // シートの中で下の方にある
+    await tester.pumpAndSettle();
+    await tester.tap(_key('board-sheet-more'));
+    await tester.pumpAndSettle();
+    expect(_key('board-sheet-exercise'), findsNothing); // シートは閉じた
+    expect(_key('board-page-exercise'), findsOneWidget);
+    expect(_key('item-row-activity'), findsOneWidget);
+  });
+
   testWidgets('首輪の表示：つながっていない', (WidgetTester tester) async {
     final CollarLink link = CollarLink();
     await tester.pumpWidget(_app(TodayPage(link: link, clock: _clock)));
