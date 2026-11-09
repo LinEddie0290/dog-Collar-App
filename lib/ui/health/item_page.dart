@@ -42,9 +42,14 @@ class ItemPage extends StatelessWidget {
           children: <Widget>[
             Row(
               children: <Widget>[
-                Text(s.demo ? '示例' : '实际数据',
-                    style: TextStyle(fontSize: 12, color: s.demo ? WaterColors.demo : WaterColors.aqua)),
-                const Spacer(),
+                Expanded(
+                  child: Text(s.demo ? '示例' : (s.item.trial ? '实际数据（试用：用模拟数据学的，还没有用真的狗确认）' : '实际数据'),
+                      key: const ValueKey<String>('item-source-tag'),
+                      style: TextStyle(
+                          fontSize: 12,
+                          color: s.demo ? WaterColors.demo : (s.item.trial ? WaterColors.trial : WaterColors.aqua))),
+                ),
+                const SizedBox(width: 8),
                 Text('今天 ${shortDate(s.days.last.date)}', style: const TextStyle(fontSize: 12, color: WaterColors.sub)),
               ],
             ),

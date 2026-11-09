@@ -2,6 +2,7 @@
 ///
 /// 項目は「功能完成度表_2026-11-04」と同じ。心理の吠叫・低吼は爱迪の声のモジュール（金字塔にある）。
 /// [HealthItem.real] は「今のアプリで本物のデータが出る」もの。それ以外は示例（偽のデータ）で出す（D-051 D2）。
+/// 挠・持续舔舐・发抖は CNN v2（T35）で本物になったが、模擬で学んだクラスなので [HealthItem.trial]（试用）。
 /// 文言は中国語だけ（D-051 D6）。
 library;
 
@@ -9,13 +10,16 @@ library;
 enum Board { exercise, sleep, physio, skin, mind, diet }
 
 class HealthItem {
-  const HealthItem(this.id, this.name, {this.real = false});
+  const HealthItem(this.id, this.name, {this.real = false, this.trial = false});
 
   final String id;
   final String name;
 
   /// 今のアプリで本物のデータが出るか（出ないものは示例）。
   final bool real;
+
+  /// 本物のデータだが「试用」（模擬の波形で学んだ CNN v2 のクラス。本物の犬でまだ確かめていない、D-005）。
+  final bool trial;
 }
 
 class BoardInfo {
@@ -47,13 +51,13 @@ const List<BoardInfo> boardInfos = <BoardInfo>[
     HealthItem('rr', '呼吸数', real: true),
     HealthItem('ecg_like', '像心电图的波形', real: true),
     HealthItem('temp', '体温（发烧・下降）'),
-    HealthItem('tremble', '发抖'),
+    HealthItem('tremble', '发抖', real: true, trial: true),
     HealthItem('recovery', '运动后的恢复'),
     HealthItem('excretion', '排尿・排便'),
   ]),
   BoardInfo(Board.skin, '皮肤', 'scratch', <HealthItem>[
-    HealthItem('scratch', '挠（耳朵・身体）'),
-    HealthItem('lick', '持续舔舐'),
+    HealthItem('scratch', '挠（耳朵・身体）', real: true, trial: true),
+    HealthItem('lick', '持续舔舐', real: true, trial: true),
     HealthItem('shake', '甩身体'),
     HealthItem('rub', '蹭擦'),
   ]),

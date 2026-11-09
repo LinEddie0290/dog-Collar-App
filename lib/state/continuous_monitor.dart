@@ -18,6 +18,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../data/ble_collar_data_source.dart';
 import '../pipeline/auto_vitals.dart';
+import '../pipeline/cnn_models.dart';
 import '../pipeline/imu_input.dart';
 import '../pipeline/pipeline_runner.dart';
 import '../pipeline/test_subject.dart';
@@ -45,6 +46,7 @@ class ContinuousMonitor extends ChangeNotifier {
   static const String _kSubject = 'monitor.subject';
   static const String _kVSensor = 'monitor.vitals_sensor';
   static const String _kVAuto = 'monitor.auto_vitals';
+  static const String _kCnn = 'monitor.cnn_version';
 
   /// 入力の選び方（F）。止めているときだけ変えられる。
   InputKind kind = InputKind.collar;
@@ -81,6 +83,7 @@ class ContinuousMonitor extends ChangeNotifier {
         av.sensor = p.getString(_kVSensor) ?? av.sensor;
         av.enabled = p.getBool(_kVAuto) ?? av.enabled;
       }
+      runner.setCnnVersion(cnnVersionFromName(p.getString(_kCnn)));
       notifyListeners();
     } catch (_) {
       // 読めなくても既定のまま使える
@@ -119,6 +122,20 @@ class ContinuousMonitor extends ChangeNotifier {
     }
   }
 
+  /// T35：CNN の版（v2 標準・v1）。記録中は変えない → false。
+  Future<bool> setCnnVersion(CnnVersion v) async {
+    if (running || starting) return false;
+    if (!runner.setCnnVersion(v)) return false;
+    notifyListeners();
+    try {
+      final SharedPreferences p = await SharedPreferences.getInstance();
+      await p.setString(_kCnn, v.name);
+    } catch (_) {
+      // 保存できなくても今回は使える
+    }
+    return true;
+  }
+
   /// E：犬の情報を変える。記録中なら今の記録にも書き足す。
   Future<void> setSubject(TestSubject s) async {
     subject = s;
@@ -142,6 +159,7 @@ class ContinuousMonitor extends ChangeNotifier {
     runner.sessionInfo = <String, Object?>{
       'input': kind.name,
       'subject': subject.toJson(),
+      'cnn': runner.cnnVersion.name,
       if (kind == InputKind.unity) 'unity_url': unityUrl,
       if (kind == InputKind.fake) 'fake_speed': fakeSpeed,
     };

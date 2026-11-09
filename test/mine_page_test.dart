@@ -2,6 +2,7 @@
 import 'package:collar_app/l10n/app_language.dart';
 import 'package:collar_app/l10n/app_strings.dart';
 import 'package:collar_app/pipeline/auto_vitals.dart';
+import 'package:collar_app/pipeline/cnn_models.dart';
 import 'package:collar_app/pipeline/pipeline_runner.dart';
 import 'package:collar_app/state/collar_link.dart';
 import 'package:collar_app/state/continuous_monitor.dart';
@@ -75,6 +76,14 @@ void main() {
     await tester.pumpAndSettle();
     expect(s.av.sensor, 'side');
     expect(tester.widget<ChoiceChip>(_key('mine-sensor-side')).selected, isTrue);
+
+    // 开发：行为的 CNN（標準 v2 → v1 に戻せる）
+    expect(s.m.runner.cnnVersion, CnnVersion.v2);
+    expect(tester.widget<ChoiceChip>(_key('mine-cnn-v2')).selected, isTrue);
+    await tester.tap(_key('mine-cnn-v1'));
+    await tester.pumpAndSettle();
+    expect(s.m.runner.cnnVersion, CnnVersion.v1);
+    expect(tester.widget<ChoiceChip>(_key('mine-cnn-v1')).selected, isTrue);
   });
 
   testWidgets('言語を変えられる・开发の 3 つ', (WidgetTester tester) async {

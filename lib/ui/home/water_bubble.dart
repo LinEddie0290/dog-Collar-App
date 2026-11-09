@@ -64,7 +64,7 @@ class WaterBubble extends StatelessWidget {
     final String b = data.board.name;
     return Semantics(
       button: true,
-      label: '${data.name} ${data.value}${data.demo ? '（示例）' : ''}${data.alert != null ? '，有提醒' : ''}',
+      label: '${data.name} ${data.value}${data.demo ? '（示例）' : (data.trial ? '（试用）' : '')}${data.alert != null ? '，有提醒' : ''}',
       excludeSemantics: true,
       child: PressableScale(
         onTap: onTap,
@@ -108,7 +108,11 @@ class WaterBubble extends StatelessWidget {
                         if (data.demo)
                           Text('示例',
                               key: ValueKey<String>('demo-$b'),
-                              style: const TextStyle(fontSize: 9.5, color: WaterColors.demo)),
+                              style: const TextStyle(fontSize: 9.5, color: WaterColors.demo))
+                        else if (data.trial)
+                          Text('试用',
+                              key: ValueKey<String>('trial-$b'),
+                              style: const TextStyle(fontSize: 9.5, color: WaterColors.trial)),
                       ],
                     ),
                   ),

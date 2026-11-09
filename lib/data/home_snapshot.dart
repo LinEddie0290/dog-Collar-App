@@ -1,8 +1,8 @@
 /// T35：ホーム（今天）に出すもの。画面から切り離した計算だけ（テストしやすいように）。
 ///
 /// - 6 つの泡：板块ごとの今日の値・示例かどうか・提醒。
-///   运动・睡眠・生理は本物（スマホで計算した 1 日まとめ）。皮肤・心理・饮食は示例（D-051 D2）。
-///   皮肤は CNN v2 をアプリに入れたら本物に替える（D-051 D4）。
+///   运动・睡眠・生理は本物（スマホで計算した 1 日まとめ）。心理・饮食は示例（D-051 D2）。
+///   皮肤は CNN v2 の挠の回数（本物・试用、T35）。
 /// - 真ん中：今の状態（記録中なら 休息中／在动 と続いている時間）。総合点は出さない（確かめていない数字なので）。
 /// 文言は中国語だけ（D-051 D6）。
 library;
@@ -18,7 +18,7 @@ import 'item_specs.dart';
 export 'health_series.dart' show noDataValue;
 
 class BubbleData {
-  const BubbleData({required this.board, required this.value, required this.demo, this.alert});
+  const BubbleData({required this.board, required this.value, required this.demo, this.alert, this.trial = false});
 
   final Board board;
 
@@ -30,6 +30,9 @@ class BubbleData {
 
   /// 今日の提醒の一文。なければ null。
   final String? alert;
+
+  /// 本物だが「试用」（CNN v2 の模擬で学んだクラス：皮肤の挠）。
+  final bool trial;
 
   String get name => boardInfo(board).name;
 }
@@ -58,8 +61,10 @@ String todayKey(DateTime now, {DailyConfig cfg = const DailyConfig()}) =>
 
 /// ホームの 6 つの泡を作る。
 ///
-/// [real] は今日の本物の 1 日まとめ（なければ null）。[demoAll] なら全部を示例にする（演示）。
-HomeSnapshot buildHomeSnapshot({required String date, DailySummary? real, bool demoAll = false}) {
+/// [real] は今日の本物の 1 日まとめ（なければ null）。[rawToday] は今日の生の数字（SummaryBundle.raw、
+/// 皮肤の挠の回数 scratch_count に使う、T35：CNN v2）。[demoAll] なら全部を示例にする（演示）。
+HomeSnapshot buildHomeSnapshot(
+    {required String date, DailySummary? real, Map<String, double>? rawToday, bool demoAll = false}) {
   const SummaryTextZh t = SummaryTextZh();
   final DailySummary? r = demoAll ? null : real;
   final bool useReal = r != null;
@@ -100,7 +105,20 @@ HomeSnapshot buildHomeSnapshot({required String date, DailySummary? real, bool d
         final num? hr = d.number('rest_hr');
         return hr == null ? '' : '心率 ${hr.round()}';
       }),
-      demoBubble(date, Board.skin),
+      if (demoAll)
+        demoBubble(date, Board.skin)
+      else
+        () {
+          final double? n = rawToday?['scratch_count'];
+          final TextItem? a = cat('skin')?.alert;
+          return BubbleData(
+            board: Board.skin,
+            value: n == null ? noDataValue : '挠 ${n.round()} 次',
+            demo: false,
+            trial: true,
+            alert: a == null ? null : t.alert(a),
+          );
+        }(),
       demoBubble(date, Board.mind),
       demoBubble(date, Board.diet),
     ],

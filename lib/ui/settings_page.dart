@@ -4,6 +4,7 @@ import '../data/daily_summary.dart';
 import '../l10n/app_language.dart';
 import '../l10n/app_strings.dart';
 import '../pipeline/auto_vitals.dart';
+import '../pipeline/cnn_models.dart';
 import '../pipeline/test_subject.dart';
 import '../state/collar_link.dart';
 import '../state/continuous_monitor.dart';
@@ -183,6 +184,31 @@ class SettingsPage extends StatelessWidget {
                         onTap: () => Navigator.of(context).push(
                           MaterialPageRoute<void>(builder: (BuildContext _) => RecordingPage(monitor: m)),
                         ),
+                      ),
+                    ),
+                  if (m != null)
+                    _SettingsRow(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: <Widget>[
+                          const Text('行为的 CNN', style: _rowTitle),
+                          Text(m.running ? '记录中不能换（停止以后再换）' : 'v2 的舔・挠・颤抖是用模拟数据学的（试用）',
+                              style: _rowSub),
+                          const SizedBox(height: 6),
+                          Wrap(
+                            spacing: 6,
+                            runSpacing: 4,
+                            children: <Widget>[
+                              for (final CnnVersion v in CnnVersion.values)
+                                ChoiceChip(
+                                  key: ValueKey<String>('mine-cnn-${v.name}'),
+                                  label: Text(v.label),
+                                  selected: m.runner.cnnVersion == v,
+                                  onSelected: m.running || m.starting ? null : (_) => m.setCnnVersion(v),
+                                ),
+                            ],
+                          ),
+                        ],
                       ),
                     ),
                   if (liveSummary != null)

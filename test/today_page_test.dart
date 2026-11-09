@@ -72,12 +72,13 @@ void main() {
     await tester.pumpWidget(_app(const TodayPage(clock: _clock)));
     await tester.pumpAndSettle();
 
-    expect(find.text('没有数据'), findsNWidgets(3));
+    expect(find.text('没有数据'), findsNWidgets(4)); // 运动・睡眠・生理・皮肤
     for (final String b in <String>['exercise', 'sleep', 'physio']) {
       expect(_key('bubble-$b'), findsOneWidget);
       expect(_key('demo-$b'), findsNothing);
     }
-    for (final String b in <String>['skin', 'mind', 'diet']) {
+    expect(_key('trial-skin'), findsOneWidget); // 皮肤は本物（试用、CNN v2）
+    for (final String b in <String>['mind', 'diet']) {
       expect(_key('demo-$b'), findsOneWidget);
     }
     expect(find.text('没有在记录'), findsOneWidget);
@@ -108,7 +109,7 @@ void main() {
     final _FakeSource src = _FakeSource(<DayEntry>[]);
     await tester.pumpWidget(_app(TodayPage(live: src, clock: _clock)));
     await tester.pumpAndSettle();
-    expect(find.text('没有数据'), findsNWidgets(3));
+    expect(find.text('没有数据'), findsNWidgets(4)); // 运动・睡眠・生理・皮肤
 
     src.days = <DayEntry>[_day('2026-11-05', activeMin: 55)];
     src.version.value++;

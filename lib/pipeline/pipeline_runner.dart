@@ -13,15 +13,14 @@
 library;
 
 import 'dart:async';
-import 'dart:convert';
 import 'dart:isolate';
 
 import 'package:collar_data/collar_data.dart';
 import 'package:collar_pipeline/collar_pipeline.dart';
 import 'package:flutter/foundation.dart';
-import 'package:flutter/services.dart' show rootBundle;
 
 import 'auto_vitals.dart';
+import 'cnn_models.dart';
 import 'imu_input.dart';
 import 'pipeline_store.dart';
 
@@ -82,11 +81,8 @@ typedef ChunkCompute = Future<ChunkOutput> Function(ChunkInput input);
 
 Future<ChunkOutput> _computeInIsolate(ChunkInput input) => Isolate.run(() => processChunk(input));
 
-/// アプリに入っている CNN v1（3 軸）を読む。
-Future<WindowClassifier> loadBundledClassifier() async {
-  final String text = await rootBundle.loadString('assets/models/cnn_imu_v1.json');
-  return WindowClassifier.fromJson(jsonDecode(text) as Map<String, dynamic>);
-}
+/// アプリに入っている標準の CNN（v2・下限 0.9）を読む。版を選ぶときは PipelineRunner.setCnnVersion。
+Future<WindowClassifier> loadBundledClassifier() => loadClassifierAsset(defaultCnnVersion);
 
 const int _unsetUs = -1 << 62;
 
@@ -151,7 +147,7 @@ class PipelineRunner extends ChangeNotifier {
     this.store,
     ChunkCompute? compute,
     this.cfg = const PipelineConfig(),
-    this.ecfg = const EventConfig(),
+    this.ecfg = appEventConfig,
     this.chunkNewS = 30,
     this.contextS = 15,
     this.tailS = 10,
@@ -161,7 +157,7 @@ class PipelineRunner extends ChangeNotifier {
     this.rawFlushRows = 1024,
     this.autoVitals,
     int Function()? nowMs,
-  })  : _loadClassifier = loadClassifier ?? loadBundledClassifier,
+  })  : _customLoader = loadClassifier,
         _compute = compute ?? _computeInIsolate,
         _nowMs = nowMs ?? (() => DateTime.now().millisecondsSinceEpoch) {
     autoVitals?.finishedListeners.add(_onAttempt);
@@ -170,7 +166,23 @@ class PipelineRunner extends ChangeNotifier {
   /// B：記録の中のデータから心拍・呼吸を測る（自動と記録中の手動）。null なら測らない。
   final AutoVitals? autoVitals;
 
-  final Future<WindowClassifier> Function() _loadClassifier;
+  /// テストなどで渡した読み方。null ならアプリに入っている [cnnVersion] の CNN。
+  final Future<WindowClassifier> Function()? _customLoader;
+
+  /// 使う CNN の版（T35：標準 v2、开发で v1 に戻せる）。
+  CnnVersion cnnVersion = defaultCnnVersion;
+
+  /// 版を変える。記録中は変えない（1 つの記録の中で混ざらないように）→ false。
+  bool setCnnVersion(CnnVersion v) {
+    if (isRunning) return false;
+    if (v != cnnVersion) {
+      cnnVersion = v;
+      _clf = null;
+      notifyListeners();
+    }
+    return true;
+  }
+
   final ChunkCompute _compute;
   final int Function() _nowMs;
   final PipelineStore? store;
@@ -455,7 +467,7 @@ class PipelineRunner extends ChangeNotifier {
       final List<ImuSample> samples = List<ImuSample>.of(s._buf);
       final int latestUs = s._latestUs;
       if (samples.isEmpty || _spanUs(s) < _minSpanUs) return;
-      _clf ??= _loadClassifier();
+      _clf ??= (_customLoader ?? () => loadClassifierAsset(cnnVersion))();
       final WindowClassifier clf = await _clf!;
       final Stopwatch sw = Stopwatch()..start();
       ChunkOutput out;

@@ -44,7 +44,7 @@ class BoardSheet extends StatelessWidget {
                 Text(info.name,
                     style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: WaterColors.text)),
                 const Spacer(),
-                if (data.demo) const _Tag('示例', WaterColors.demo),
+                if (data.demo) const _Tag('示例', WaterColors.demo) else if (data.trial) const _Tag('试用', WaterColors.trial),
               ],
             ),
             const SizedBox(height: 8),
@@ -55,7 +55,9 @@ class BoardSheet extends StatelessWidget {
             Text(
                 data.demo
                     ? '这个板块现在是示例数据（不是这只狗的）'
-                    : (data.value == noDataValue ? '今天还没有数据（开始记录以后会有）' : '今天的数据（这个手机算出来的）'),
+                    : (data.value == noDataValue
+                        ? '今天还没有数据（开始记录以后会有）'
+                        : (data.trial ? '今天的数据（试用：用模拟数据学的，还没有用真的狗确认）' : '今天的数据（这个手机算出来的）')),
                 style: const TextStyle(fontSize: 12, color: WaterColors.sub)),
             if (data.alert != null) ...<Widget>[
               const SizedBox(height: 12),
@@ -86,7 +88,9 @@ class BoardSheet extends StatelessWidget {
                   children: <Widget>[
                     Expanded(
                         child: Text(item.name, style: const TextStyle(fontSize: 14, color: WaterColors.text))),
-                    if (item.real)
+                    if (item.trial)
+                      const _Tag('试用', WaterColors.trial)
+                    else if (item.real)
                       const _Tag('实际数据', WaterColors.aqua)
                     else
                       const _Tag('示例', WaterColors.demo),

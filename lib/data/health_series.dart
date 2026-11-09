@@ -2,6 +2,7 @@
 ///
 /// - 实际：运动量（history の active_min）・活动与休息（raw の rest_lie）・睡眠时长（sleep_min）・
 ///   安静时心率（rest_hr）・呼吸数（rest_rr）。睡觉时的呼吸は今は履歴に出ていない（提醒があればその値だけ）。
+///   T35：挠（raw の scratch_count）・持续舔舐（lick_min）・发抖（shake_count）＝CNN v2（试用）。
 /// - 示例：項目ごとの範囲から日付で作る（同じ日なら同じ）。板块の代表の項目（ホームの泡）は
 ///   7 日に 1 回くらい提醒が出て、その日は値も少ない／多い方に寄せる。
 /// - 平時：今日より前の 14 日の中央値（値のある日が 7 日以上のときだけ）。帯は ±15%。
@@ -194,6 +195,13 @@ ItemSeries buildItemSeries(String itemId, {required String today, SummaryBundle?
         return h?.restHr;
       case 'rr':
         return h?.restRr;
+      // T35：CNN v2（1 日まとめの値を raw に入れてある）。CNN の shake＝颤抖＝发抖
+      case 'scratch':
+        return raw[d]?['scratch_count'];
+      case 'lick':
+        return raw[d]?['lick_min'];
+      case 'tremble':
+        return raw[d]?['shake_count'];
       default:
         return null;
     }
@@ -222,7 +230,7 @@ List<ItemSeries> buildBoardSeries(Board b, {required String today, SummaryBundle
         buildItemSeries(i.id, today: today, real: real, demoAll: demoAll),
     ];
 
-/// 1 日まとめの提醒を項目に割り当てる。皮肤の提醒は使わない（CNN v2 まで示例）。
+/// 1 日まとめの提醒を項目に割り当てる。皮肤（挠と舔の回数）の提醒は「挠」に出す（T35：CNN v2）。
 TextItem? _realAlertItem(String itemId, DailySummary? s) {
   if (s == null) return null;
   for (final CategorySummary c in s.categories) {
@@ -231,6 +239,7 @@ TextItem? _realAlertItem(String itemId, DailySummary? s) {
     final String? target = switch (c.id) {
       'exercise' => 'activity',
       'sleep' => 'sleep_time',
+      'skin' => 'scratch',
       'physio' => switch (a.text('metric')) {
           'rest_rr_median' => 'rr',
           'sleep_rr_median' => 'sleep_rr',

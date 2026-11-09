@@ -12,6 +12,7 @@ import 'package:collar_pipeline/collar_pipeline.dart';
 import 'package:flutter/foundation.dart';
 
 import '../data/daily_summary.dart';
+import 'cnn_models.dart';
 import 'pipeline_runner.dart';
 import 'pipeline_store.dart';
 
@@ -41,10 +42,13 @@ class PipelineSummaryRepository implements SummarySource {
 /// 出来事の種類ごとの分（生の数字。テスト中に「本当に動いているか」を見るため）。
 const List<String> rawEventTypes = <String>['rest_lie', 'walk_run', 'other', 'lick', 'scratch', 'shake', 'long_still'];
 
+/// 1 日まとめ（DailyRow）から raw に入れる値（T35：CNN v2）。
+const List<String> dailyRawMetrics = <String>['scratch_count', 'lick_min', 'shake_count'];
+
 /// フォルダの中のセッション → JSON の文字列（isolate から返すため）。
 String buildSummaryData(String dirPath, String dogId, String generatedAt,
     {PipelineConfig cfg = const PipelineConfig(),
-    EventConfig ecfg = const EventConfig(),
+    EventConfig ecfg = appEventConfig,
     DailyConfig dcfg = const DailyConfig()}) {
   final List<StoredSession> sessions = loadSessionsFrom(dirPath);
   final List<BehaviorEvent> events = <BehaviorEvent>[];
@@ -69,6 +73,11 @@ String buildSummaryData(String dirPath, String dogId, String generatedAt,
   final Map<String, Map<String, double>> raw = <String, Map<String, double>>{
     for (final String d in dates) d: <String, double>{'wear_min': wins[d]! / 60.0},
   };
+  // T35：CNN v2 の 挠の回数・舔の分・颤抖の回数（1 日まとめが出す値。皮肤・生理の項目に使う）
+  for (final DailyRow r in rows) {
+    if (!dailyRawMetrics.contains(r.metric) || r.value.isNaN) continue;
+    raw[r.date]?[r.metric] = r.value;
+  }
   for (final BehaviorEvent e in events) {
     if (e.tStartMs < 0) continue;
     final String d = dateKey(DateTime.fromMillisecondsSinceEpoch(e.tStartMs, isUtc: true)

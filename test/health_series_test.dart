@@ -187,7 +187,7 @@ void main() {
       expect(demo.today, demoValue(_today, 'activity'));
     });
 
-    test('1 日まとめの提醒を項目に割り当てる（皮肤は使わない）', () {
+    test('1 日まとめの提醒を項目に割り当てる（皮肤は「挠」に）', () {
       final SummaryBundle b = _bundle(alerts: <Map<String, dynamic>>[
         _alertCat('exercise', 'exercise.alert.less', <String, dynamic>{'ratio': 0.4}),
         _alertCat('physio', 'physio.alert.up', <String, dynamic>{'metric': 'sleep_rr_median', 'value': 32}),
@@ -198,13 +198,35 @@ void main() {
       expect(srr.alert, '睡觉时呼吸比较快（32 次/分）');
       expect(srr.today, 32);
       expect(buildItemSeries('rest_hr', today: _today, real: b).alert, isNull);
-      expect(buildItemSeries('scratch', today: _today, real: b).alert, demoBubble(_today, Board.skin).alert);
+      expect(buildItemSeries('scratch', today: _today, real: b).alert, '今天挠和舔比平时多很多，挠和舔了 30 次');
+      expect(buildItemSeries('lick', today: _today, real: b).alert, isNull);
 
       final SummaryBundle rr = _bundle(alerts: <Map<String, dynamic>>[
         _alertCat('physio', 'physio.alert.up', <String, dynamic>{'metric': 'rest_rr_median', 'ratio': 1.3}),
       ]);
       expect(buildItemSeries('rr', today: _today, real: rr).alert, '安静时呼吸比平时高（平时的 1.3 倍）');
       expect(buildItemSeries('rest_hr', today: _today, real: rr).alert, isNull);
+    });
+
+    test('CNN v2（试用）：挠の回数・舔の分・颤抖の回数は raw から', () {
+      final SummaryBundle b = _bundle(raw: <String, Map<String, double>>{
+        '2026-11-04': <String, double>{'wear_min': 600, 'scratch_count': 2, 'lick_min': 1.5, 'shake_count': 0},
+        _today: <String, double>{'wear_min': 900, 'scratch_count': 5, 'lick_min': 3.5, 'shake_count': 1},
+      });
+      final ItemSeries sc = buildItemSeries('scratch', today: _today, real: b);
+      expect(sc.demo, isFalse);
+      expect(sc.item.trial, isTrue);
+      expect(sc.today, 5);
+      expect(sc.days[seriesDays - 2].value, 2);
+      expect(sc.days.first.value, isNull);
+      expect(sc.format(sc.today), '5 次');
+      final ItemSeries lk = buildItemSeries('lick', today: _today, real: b);
+      expect(lk.today, 3.5);
+      expect(lk.format(lk.today), '4 分钟'); // 分は整数で出す
+      expect(buildItemSeries('tremble', today: _today, real: b).today, 1);
+      // 甩身体・蹭擦は v2 にクラスがない → 示例のまま
+      expect(buildItemSeries('shake', today: _today, real: b).demo, isTrue);
+      expect(buildItemSeries('rub', today: _today, real: b).demo, isTrue);
     });
 
     test('板块ごと：一覧の順', () {

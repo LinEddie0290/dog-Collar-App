@@ -28,6 +28,9 @@ class WaterColors {
   /// 「示例」の文字。
   static const Color demo = Color(0xFF8A9BA8);
 
+  /// 「试用」の文字（本物だが、まだ本物の犬で確かめていない：CNN v2 の挠・舔・颤抖）。
+  static const Color trial = Color(0xFFB8741C);
+
   /// 白いガラスのカード。
   static const Color card = Color(0xB8FFFFFF);
 }

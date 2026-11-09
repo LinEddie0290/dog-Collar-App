@@ -134,7 +134,8 @@ class _TodayPageState extends State<TodayPage> {
         builder: (BuildContext context, Widget? _) {
           final DateTime now = widget.clock();
           final String today = todayKey(now);
-          final HomeSnapshot snap = buildHomeSnapshot(date: today, real: _summaryOn(today), demoAll: _demo);
+          final HomeSnapshot snap =
+              buildHomeSnapshot(date: today, real: _summaryOn(today), rawToday: _bundle?.raw[today], demoAll: _demo);
           return SingleChildScrollView(
             key: const ValueKey<String>('today-page'),
             padding: const EdgeInsets.only(top: 12, bottom: 24),

@@ -133,8 +133,10 @@ class ItemRow extends StatelessWidget {
                   child: SeriesChart(values: <double?>[for (final ItemDay d in s.recent14) d.value], color: c, mini: true),
                 ),
               const SizedBox(width: 8),
-              Text(s.demo ? '示例' : '实际',
-                  style: TextStyle(fontSize: 11, color: s.demo ? WaterColors.demo : WaterColors.aqua)),
+              Text(s.demo ? '示例' : (s.item.trial ? '试用' : '实际'),
+                  style: TextStyle(
+                      fontSize: 11,
+                      color: s.demo ? WaterColors.demo : (s.item.trial ? WaterColors.trial : WaterColors.aqua))),
               const Icon(Icons.chevron_right, size: 18, color: WaterColors.sub),
             ],
           ),
