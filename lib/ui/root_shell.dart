@@ -11,6 +11,7 @@ import '../state/vitals_session.dart';
 import 'health/health_page.dart';
 import 'map_page.dart';
 import 'measure_page.dart';
+import 'safety/safety_page.dart';
 import 'settings_page.dart';
 import 'today_page.dart';
 import 'vitals_history_page.dart';
@@ -75,12 +76,17 @@ class _RootShellState extends State<RootShell> {
         session: widget.vitalsSession,
         link: widget.collarLink,
       ),
-      // 安全：地図（位置は T12 で本物に替える）
-      MapPage(controller: widget.controller, locationController: widget.locationController),
-      // 我的：言語・データ・开发（記録・テスト画面、每天（旧）、CNN の速さ）
+      // 安全：今の状態・地図・緊急（T35。位置は T12、緊急の判定は T34-G で本物に替える）
+      SafetyPage(
+        monitor: widget.monitor,
+        link: widget.collarLink,
+        map: MapPage(controller: widget.controller, locationController: widget.locationController),
+      ),
+      // 我的：狗的信息・项圈・言語・データ・开发（記録・テスト画面、每天（旧）、CNN の速さ）
       SettingsPage(
         localeController: widget.localeController,
         monitor: widget.monitor,
+        link: widget.collarLink,
         liveSummary: widget.liveSummary,
       ),
     ];

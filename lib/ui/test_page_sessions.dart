@@ -55,81 +55,105 @@ class SubjectCard extends StatelessWidget {
     );
   }
 
-  Future<void> _edit(BuildContext context) async {
-    final TestSubject s = monitor.subject;
-    final TextEditingController name = TextEditingController(text: s.name);
-    final TextEditingController breed = TextEditingController(text: s.breed);
-    final TextEditingController weight = TextEditingController(text: s.weightKg?.toString() ?? '');
-    final TextEditingController note = TextEditingController(text: s.note);
-    String position = s.position;
-    final TestSubject? got = await showDialog<TestSubject>(
-      context: context,
-      builder: (BuildContext ctx) => StatefulBuilder(
-        builder: (BuildContext ctx, StateSetter set) => AlertDialog(
-          title: const Text('狗的信息'),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
+  Future<void> _edit(BuildContext context) => editSubjectDialog(context, monitor);
+}
+
+/// 「狗的信息」を編集するダイアログ（记录・测试と「我的」タブで同じもの、T35）。
+Future<void> editSubjectDialog(BuildContext context, ContinuousMonitor monitor) async {
+  final TestSubject? got = await showDialog<TestSubject>(
+    context: context,
+    builder: (BuildContext _) => _SubjectDialog(initial: monitor.subject),
+  );
+  if (got != null) await monitor.setSubject(got);
+}
+
+/// 入力欄（TextEditingController）はこのダイアログが持ち、ダイアログが消えるとき（閉じるアニメーションのあと）に捨てる。
+/// 前は showDialog から戻った直後に捨てていたので、閉じるアニメーション中に「捨てた入力欄を使った」エラーになっていた。
+class _SubjectDialog extends StatefulWidget {
+  const _SubjectDialog({required this.initial});
+
+  final TestSubject initial;
+
+  @override
+  State<_SubjectDialog> createState() => _SubjectDialogState();
+}
+
+class _SubjectDialogState extends State<_SubjectDialog> {
+  late final TextEditingController _name = TextEditingController(text: widget.initial.name);
+  late final TextEditingController _breed = TextEditingController(text: widget.initial.breed);
+  late final TextEditingController _weight = TextEditingController(text: widget.initial.weightKg?.toString() ?? '');
+  late final TextEditingController _note = TextEditingController(text: widget.initial.note);
+  late String _position = widget.initial.position;
+
+  @override
+  void dispose() {
+    for (final TextEditingController c in <TextEditingController>[_name, _breed, _weight, _note]) {
+      c.dispose();
+    }
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('狗的信息'),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            TextField(
+                key: const ValueKey<String>('subject-name'),
+                controller: _name,
+                decoration: const InputDecoration(labelText: '名字')),
+            TextField(
+                key: const ValueKey<String>('subject-breed'),
+                controller: _breed,
+                decoration: const InputDecoration(labelText: '品种')),
+            TextField(
+              key: const ValueKey<String>('subject-weight'),
+              controller: _weight,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              decoration: const InputDecoration(labelText: '体重（kg）'),
+            ),
+            const SizedBox(height: 8),
+            const Align(alignment: Alignment.centerLeft, child: Text('项圈的位置', style: _small)),
+            Wrap(
+              spacing: 6,
               children: <Widget>[
-                TextField(
-                    key: const ValueKey<String>('subject-name'),
-                    controller: name,
-                    decoration: const InputDecoration(labelText: '名字')),
-                TextField(
-                    key: const ValueKey<String>('subject-breed'),
-                    controller: breed,
-                    decoration: const InputDecoration(labelText: '品种')),
-                TextField(
-                  key: const ValueKey<String>('subject-weight'),
-                  controller: weight,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  decoration: const InputDecoration(labelText: '体重（kg）'),
-                ),
-                const SizedBox(height: 8),
-                const Align(alignment: Alignment.centerLeft, child: Text('项圈的位置', style: _small)),
-                Wrap(
-                  spacing: 6,
-                  children: <Widget>[
-                    for (final MapEntry<String, String> e in collarPositions.entries)
-                      ChoiceChip(
-                        key: ValueKey<String>('subject-pos-${e.key}'),
-                        label: Text(e.value),
-                        selected: position == e.key,
-                        onSelected: (_) => set(() => position = e.key),
-                      ),
-                  ],
-                ),
-                TextField(
-                    key: const ValueKey<String>('subject-note'),
-                    controller: note,
-                    decoration: const InputDecoration(labelText: '备注（项圈松紧、场所等）')),
+                for (final MapEntry<String, String> e in collarPositions.entries)
+                  ChoiceChip(
+                    key: ValueKey<String>('subject-pos-${e.key}'),
+                    label: Text(e.value),
+                    selected: _position == e.key,
+                    onSelected: (_) => setState(() => _position = e.key),
+                  ),
               ],
             ),
-          ),
-          actions: <Widget>[
-            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('取消')),
-            FilledButton(
-              key: const ValueKey<String>('subject-save'),
-              onPressed: () => Navigator.pop(
-                ctx,
-                TestSubject(
-                  name: name.text.trim(),
-                  breed: breed.text.trim(),
-                  weightKg: double.tryParse(weight.text.trim()),
-                  position: position,
-                  note: note.text.trim(),
-                ),
-              ),
-              child: const Text('好'),
-            ),
+            TextField(
+                key: const ValueKey<String>('subject-note'),
+                controller: _note,
+                decoration: const InputDecoration(labelText: '备注（项圈松紧、场所等）')),
           ],
         ),
       ),
+      actions: <Widget>[
+        TextButton(onPressed: () => Navigator.pop(context), child: const Text('取消')),
+        FilledButton(
+          key: const ValueKey<String>('subject-save'),
+          onPressed: () => Navigator.pop(
+            context,
+            TestSubject(
+              name: _name.text.trim(),
+              breed: _breed.text.trim(),
+              weightKg: double.tryParse(_weight.text.trim()),
+              position: _position,
+              note: _note.text.trim(),
+            ),
+          ),
+          child: const Text('好'),
+        ),
+      ],
     );
-    for (final TextEditingController c in <TextEditingController>[name, breed, weight, note]) {
-      c.dispose();
-    }
-    if (got != null) await monitor.setSubject(got);
   }
 }
 

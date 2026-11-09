@@ -55,7 +55,7 @@ class _SeriesPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final List<double> vs = <double>[for (final double? v in values) if (v != null) v];
+    final List<double> vs = <double>[for (final double? v in values) ?v];
     final double? u = usual;
     final double b = bandPct / 100;
     double lo = vs.reduce(math.min);

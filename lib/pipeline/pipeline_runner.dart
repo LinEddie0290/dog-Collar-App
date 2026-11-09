@@ -214,6 +214,9 @@ class PipelineRunner extends ChangeNotifier {
 
   // テスト画面（C）用の数字
   int samplesIn = 0;
+
+  /// 最後にサンプルを受けた時刻（スマホの時計、ms）。安全タブの「最后收到数据」に使う（T35）。
+  int? lastReceivedMs;
   int chunksDone = 0;
   int windowsTotal = 0;
   Duration lastComputeTime = Duration.zero;
@@ -294,6 +297,7 @@ class PipelineRunner extends ChangeNotifier {
     if (saveRaw && store != null) _rawLine(s, x);
     autoVitals?.onSample(x);
     samplesIn++;
+    lastReceivedMs = _nowMs();
     if (x.tDevUs > s._latestUs) s._latestUs = x.tDevUs;
     if (!s._busy && s._latestUs - s._processedToUs >= chunkNewS * 1e6 && _spanUs(s) >= _minSpanUs) {
       s._busy = true;
