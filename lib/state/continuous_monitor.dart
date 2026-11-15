@@ -24,6 +24,7 @@ import '../pipeline/imu_input.dart';
 import '../pipeline/pipeline_runner.dart';
 import '../pipeline/test_subject.dart';
 import 'collar_link.dart';
+import 'emergency_controller.dart';
 import 'location_controller.dart';
 import 'vitals_session.dart';
 
@@ -36,8 +37,18 @@ ImuInput _defaultFactory(InputKind kind, ContinuousMonitor m) => kind == InputKi
 
 class ContinuousMonitor extends ChangeNotifier {
   ContinuousMonitor(
-      {required this.link, required this.runner, this.vitals, this.location, ImuInputFactory? inputFactory})
-      : _factory = inputFactory ?? _defaultFactory;
+      {required this.link,
+      required this.runner,
+      this.vitals,
+      this.location,
+      this.emergency,
+      ImuInputFactory? inputFactory})
+      : _factory = inputFactory ?? _defaultFactory {
+    emergency?.attachTo(runner);
+  }
+
+  /// T34-G：緊急の見張り（冲击・倒下・心率异常）。null なら見ない。
+  final EmergencyController? emergency;
 
   final CollarLink link;
   final PipelineRunner runner;
@@ -164,6 +175,7 @@ class ContinuousMonitor extends ChangeNotifier {
     if (running || starting) return;
     starting = true;
     errorMessage = null;
+    emergency?.resetWatch();
     runner.sessionInfo = <String, Object?>{
       'input': kind.name,
       'subject': subject.toJson(),
@@ -290,6 +302,7 @@ class ContinuousMonitor extends ChangeNotifier {
     final InputKind? k = runningKind;
     runningKind = null;
     await _detachGps();
+    emergency?.resetWatch();
     if (k == InputKind.collar) {
       link.removeListener(_onLink);
       await _sub?.cancel();

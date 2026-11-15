@@ -1,10 +1,11 @@
 /// T35 安全タブ：緊急の 4 項目（完成度表 #24〜27）・示例の緊急の記録・今の安全の状態。画面から切り離した計算だけ。
 ///
-/// 緊急の判定はまだない（T34-G）ので、4 項目と記録は示例（D-051 D2・設計メモ T35_安全・我的タブ S2）。
+/// 判定：走失は T36（D-059）、冲击・倒下・心率异常は T34-G（D-060）。見張りがないとき（テスト・演示）は示例。
 /// 「很久不动」（long_still＝休息 5 分以上＋心拍）は寝ているときも出るので、緊急には使わない（S3）。
 /// 赤は使わない（診断ではない・示例なので）。文言は中国語だけ。
 library;
 
+import 'emergency_watch.dart';
 import 'health_series.dart' show lastDates;
 import 'safe_zone.dart';
 
@@ -27,28 +28,28 @@ class EmergencySpec {
 const List<EmergencySpec> emergencySpecs = <EmergencySpec>[
   EmergencySpec(EmergencyKind.fall,
       name: '倒下・长时间不动',
-      how: '活动量突然变成几乎 0，身体的方向突然变（横倒），持续几分钟',
+      how: '突然的大动作（2.5 g 以上，或 1 秒内身体方向变 60° 以上），之后 2 分钟几乎不动',
       what: '突然倒下以后一直不动',
       why: '可能是晕倒、中暑或受伤，要马上去看',
-      source: 'IMU（加速度和重力的方向）→ 项圈自己判断（T34-G，还在做）'),
+      source: 'IMU（加速度和重力的方向）→ 现在手机判断（以后项圈自己判断）'),
   EmergencySpec(EmergencyKind.heart,
       name: '心率异常',
-      how: '安静时的心率连续几次比这只狗的平时和安全线高很多（或低很多）',
+      how: '安静时自动测的心率，连续 2 次在 50〜180 次/分 外面（试用，安全线要请兽医确认）',
       what: '安静时心率的大的变化',
       why: '可能是疼痛、发烧或心脏的问题，安全线要请兽医确认',
-      source: 'IMU → 自动测量的心率 → 和平时比（T34-G，还在做）'),
+      source: 'IMU → 自动测量的心率（试用：还在和手数的比）'),
   EmergencySpec(EmergencyKind.lost,
       name: '走失・离开安全区',
       how: '项圈和手机断开，并且位置在安全区外面',
       what: '狗离开家（安全区）',
       why: '越早知道越容易找到',
-      source: 'GPS ＋ BLE 的连接（T12，还在做）'),
+      source: 'GPS ＋ 项圈和手机的连接'),
   EmergencySpec(EmergencyKind.impact,
       name: '突然的冲击',
-      how: '加速度突然非常大（被撞、摔下来）',
+      how: '加速度超过 4 g（被撞、摔下来）。只记录，不通知（跳下来也会有）',
       what: '很大的冲击',
       why: '可能受伤，要看一下狗的样子',
-      source: 'IMU（加速度的大小）（还在做）'),
+      source: 'IMU（加速度的大小）'),
 ];
 
 EmergencySpec emergencySpec(EmergencyKind k) => emergencySpecs.firstWhere((EmergencySpec s) => s.kind == k);
@@ -172,3 +173,31 @@ String collarStatusLine({required bool? connected, required bool recording, int?
 /// 最後のデータから長くたっている（記録中なのに 60 秒以上来ない）＝注意。
 bool dataStale({required bool recording, int? lastReceivedMs, required int nowMs}) =>
     recording && lastReceivedMs != null && nowMs - lastReceivedMs >= 60000;
+
+// ───────── 本物の記録（T34-G：冲击・倒下・心率异常） ─────────
+
+/// 緊急の判定（[EmergencyHit]）を、緊急の記録の形にする（新しい順・[today] までの [days] 日、UTC＋8）。
+List<EmergencyEvent> hitEmergencyEvents(List<EmergencyHit> hits, String today, {int days = 7}) {
+  final Set<String> keep = lastDates(today, days).toSet();
+  final List<EmergencyEvent> out = <EmergencyEvent>[];
+  for (final EmergencyHit h in hits) {
+    final DateTime local = DateTime.fromMillisecondsSinceEpoch(h.tMs, isUtc: true).add(const Duration(hours: 8));
+    final String date = '${local.year}-${local.month.toString().padLeft(2, '0')}-${local.day.toString().padLeft(2, '0')}';
+    if (!keep.contains(date)) continue;
+    out.add(EmergencyEvent(
+      date: date,
+      minuteOfDay: local.hour * 60 + local.minute,
+      kind: h.kind,
+      detail: h.detail,
+      outcome: !h.notify
+          ? '只记录（不通知）'
+          : h.notified
+              ? '已通知'
+              : '10 分钟内已经通知过，这次没有再通知',
+      demo: false,
+      id: 'event-hit-${h.tMs}-${h.kind.name}',
+    ));
+  }
+  return out;
+}
+

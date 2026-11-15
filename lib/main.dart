@@ -6,6 +6,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'l10n/app_language.dart';
 import 'l10n/app_strings.dart';
 import 'state/app_notifier.dart';
+import 'state/emergency_controller.dart';
 import 'state/locale_controller.dart';
 import 'data/measurement_store.dart';
 import 'state/location_controller.dart';
@@ -44,6 +45,7 @@ class _CollarAppState extends State<CollarApp> {
   final AutoVitals _autoVitals = AutoVitals();
   late final PipelineRunner _pipelineRunner = PipelineRunner(store: _pipelineStore, autoVitals: _autoVitals);
   late final ContinuousMonitor _monitor;
+  late final EmergencyController _emergency;
   late final PipelineSummaryRepository _liveSummary;
   bool _amapInitialized = false;
 
@@ -54,6 +56,8 @@ class _CollarAppState extends State<CollarApp> {
     final LocalAppNotifier notifier = LocalAppNotifier();
     unawaited(notifier.init()); // 通知の許可を最初に聞く（断られても画面の表示は出る）
     _locationController = LocationController(notifier: notifier);
+    // T34-G：冲击・倒下・心率异常（記録の IMU と自動の心拍から。通知は倒下・心率だけ）
+    _emergency = EmergencyController(notifier: notifier);
     _vitalsSession =
         VitalsSession(
       store: _measurementStore,
@@ -67,7 +71,11 @@ class _CollarAppState extends State<CollarApp> {
     );
     _autoVitals.finishedListeners.add((VitalAttempt a) => unawaited(saver.save(a)));
     _monitor = ContinuousMonitor(
-        link: _collarLink, runner: _pipelineRunner, vitals: _vitalsSession, location: _locationController);
+        link: _collarLink,
+        runner: _pipelineRunner,
+        vitals: _vitalsSession,
+        location: _locationController,
+        emergency: _emergency);
     _liveSummary = PipelineSummaryRepository(store: _pipelineStore, changes: _pipelineRunner.dataVersion);
     unawaited(_collarLink.loadKnown());
     unawaited(_localeController.loadSaved());
@@ -79,6 +87,7 @@ class _CollarAppState extends State<CollarApp> {
   void dispose() {
     _localeController.dispose();
     _locationController.dispose();
+    _emergency.dispose();
     _monitor.dispose();
     _pipelineRunner.dispose();
     _autoVitals.dispose();

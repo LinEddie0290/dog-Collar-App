@@ -4,13 +4,16 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
 
+import 'package:collar_app/data/emergency_watch.dart';
 import 'package:collar_app/data/safe_zone.dart';
+import 'package:collar_app/data/safety.dart' show EmergencyKind;
 import 'package:collar_app/pipeline/imu_input.dart';
 import 'package:collar_app/pipeline/pipeline_runner.dart';
 import 'package:collar_app/pipeline/pipeline_store.dart';
 import 'package:collar_app/state/app_notifier.dart';
 import 'package:collar_app/state/collar_link.dart';
 import 'package:collar_app/state/continuous_monitor.dart';
+import 'package:collar_app/state/emergency_controller.dart';
 import 'package:collar_app/state/location_controller.dart';
 import 'package:collar_pipeline/collar_pipeline.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -199,6 +202,58 @@ void main() {
       expect(gps.first['src'], 'fake');
       expect(gps.last['t_ms'] as int, greaterThan(gps.first['t_ms'] as int));
       lc.dispose();
+    });
+
+    test('T34-G：模拟の記録で「模拟摔倒」→ 2 分後に可能倒下了の通知・記録ファイルに emergency の行', () async {
+      final Directory tmp = await Directory.systemTemp.createTemp('t34g');
+      addTearDown(() => tmp.delete(recursive: true));
+      int now = DateTime.utc(2026, 11, 1, 2).millisecondsSinceEpoch;
+      final PipelineStore store = PipelineStore(baseDir: () async => tmp.path);
+      final PipelineRunner runner = PipelineRunner(
+        loadClassifier: () async => _clf,
+        compute: (ChunkInput i) async => processChunk(i),
+        store: store,
+        nowMs: () => now,
+      );
+      final MemoryNotifier n = MemoryNotifier();
+      final EmergencyController em = EmergencyController(notifier: n);
+      final FakeImuInput fake = FakeImuInput(nowMs: () => now, tick: const Duration(hours: 1));
+      final ContinuousMonitor m = ContinuousMonitor(
+          link: CollarLink(), runner: runner, emergency: em, inputFactory: (InputKind k, ContinuousMonitor _) => fake);
+      m.kind = InputKind.fake;
+      await m.start();
+      Future<void> step(int seconds) async {
+        for (int s = 0; s < seconds; s++) {
+          now += 1000;
+          fake.pump();
+          await Future<void>.delayed(Duration.zero);
+          await runner.idle();
+        }
+      }
+
+      await step(10); // 静止中
+      fake.injectFall();
+      await step(120); // まだ 2 分 3 秒たっていない
+      expect(em.hits, isEmpty);
+      expect(em.motion.pending, isTrue);
+      await step(5);
+      expect(em.hits.map((EmergencyHit h) => h.kind).toList(), <EmergencyKind>[EmergencyKind.fall]);
+      expect(em.hits.single.tMs - DateTime.utc(2026, 11, 1, 2).millisecondsSinceEpoch, inInclusiveRange(10000, 10100));
+      expect(n.shown.single.title, '可能倒下了');
+
+      final String id = runner.session!.id;
+      await m.stop();
+      await store.idle();
+      final List<Map<String, dynamic>> rows = <Map<String, dynamic>>[
+        for (final String line in File('${tmp.path}/pipeline_sessions/$id.jsonl').readAsLinesSync())
+          if (line.isNotEmpty) jsonDecode(line) as Map<String, dynamic>,
+      ];
+      final List<Map<String, dynamic>> emg = rows.where((Map<String, dynamic> r) => r['rec'] == 'emergency').toList();
+      expect(emg.single['kind'], 'fall');
+      expect(emg.single['notified'], isTrue);
+      // 正解のラベルにも「fall」が残る（L6 で録画と比べるときと同じ形）
+      expect(rows.any((Map<String, dynamic> r) => r['rec'] == 'truth' && r['label'] == 'fall'), isTrue);
+      em.dispose();
     });
   });
 }

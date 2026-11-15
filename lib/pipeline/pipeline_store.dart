@@ -17,6 +17,7 @@ import 'dart:io';
 import 'package:collar_pipeline/collar_pipeline.dart';
 import 'package:path_provider/path_provider.dart';
 
+import '../data/emergency_watch.dart';
 import '../data/safe_zone.dart';
 import 'imu_input.dart';
 import 'pipeline_runner.dart';
@@ -113,6 +114,16 @@ class PipelineStore {
         'lng': f.point.lng,
         if (f.accuracyM != null) 'acc_m': f.accuracyM,
         if (f.source.isNotEmpty) 'src': f.source,
+      });
+
+  /// T34-G：緊急（冲击・倒下・心率异常）。
+  Future<void> appendEmergency(String id, EmergencyHit h) => _append(id, <String, Object?>{
+        'rec': 'emergency',
+        'kind': h.kind.name,
+        't_ms': h.tMs,
+        'value': double.parse(h.value.toStringAsFixed(3)),
+        'detail': h.detail,
+        'notified': h.notified,
       });
 
   /// D の取り消し。読むときに同じ時刻・ラベルのボタンの印を消す。

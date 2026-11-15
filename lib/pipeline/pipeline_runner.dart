@@ -19,6 +19,7 @@ import 'package:collar_data/collar_data.dart';
 import 'package:collar_pipeline/collar_pipeline.dart';
 import 'package:flutter/foundation.dart';
 
+import '../data/emergency_watch.dart';
 import '../data/safe_zone.dart';
 import 'auto_vitals.dart';
 import 'cnn_models.dart';
@@ -297,6 +298,10 @@ class PipelineRunner extends ChangeNotifier {
       last = null;
     }
     if (last != null && x.tDevUs <= last) return; // 同じ時刻・順番の入れ替わりは捨てる
+    // T34-G：緊急の見張り（チャンクを待たずに 1 サンプルずつ）
+    for (final void Function(ImuSample x) f in sampleTaps) {
+      f(x);
+    }
     final SensorStats st = sensorStats.putIfAbsent(x.sensor, SensorStats.new);
     if (last == null) {
       st.count++;
@@ -358,6 +363,16 @@ class PipelineRunner extends ChangeNotifier {
 
   /// T36：GPS の位置を記録に残す（処理の流れには入れない。L6 で距離を確かめるため）。
   /// 記録をしていない（セッションがない）ときは残さない。
+  /// T34-G：受け付けた IMU を 1 サンプルずつ渡す先（緊急の見張り）。
+  final List<void Function(ImuSample x)> sampleTaps = <void Function(ImuSample x)>[];
+
+  /// T34-G：緊急の 1 件を記録ファイルへ（記録中だけ）。
+  void addEmergency(EmergencyHit h) {
+    final PipelineSession? s = _session;
+    if (s == null) return;
+    unawaited(store?.appendEmergency(s.id, h));
+  }
+
   void addGps(LocationFix f) {
     final PipelineSession? s = _session;
     if (s == null) return;

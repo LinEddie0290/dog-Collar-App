@@ -2,6 +2,7 @@
 import 'package:collar_app/data/safe_zone.dart';
 import 'package:collar_app/data/safety.dart';
 import 'package:collar_app/state/collar_link.dart';
+import 'package:collar_app/state/emergency_controller.dart';
 import 'package:collar_app/state/location_controller.dart';
 import 'package:collar_app/ui/safety/safety_page.dart';
 import 'package:flutter/material.dart';
@@ -118,6 +119,32 @@ void main() {
     lc.addFix(LocationFix(point: home, tMs: nowMs));
     await tester.pumpAndSettle();
     expect(find.textContaining('位置：在家（安全区里）'), findsOneWidget);
+  });
+
+  testWidgets('T34-G：緊急の見張りがあると冲击・倒下・心率は实际（記録は本物だけ）、走失は示例のまま', (WidgetTester tester) async {
+    _tall(tester);
+    final int nowMs = _clock().millisecondsSinceEpoch;
+    final EmergencyController em = EmergencyController();
+    addTearDown(em.dispose);
+    em.addHeart(tMs: nowMs - 120000, bpm: 190, good: true);
+    em.addHeart(tMs: nowMs - 60000, bpm: 195, good: true);
+
+    await tester.pumpWidget(MaterialApp(home: Scaffold(body: SafetyPage(clock: _clock, emergency: em))));
+    await tester.pumpAndSettle();
+    for (final EmergencyKind k in <EmergencyKind>[EmergencyKind.fall, EmergencyKind.heart, EmergencyKind.impact]) {
+      expect(find.descendant(of: _key('emergency-${k.name}'), matching: find.text('实际')), findsOneWidget, reason: k.name);
+    }
+    expect(find.descendant(of: _key('emergency-lost'), matching: find.text('示例')), findsOneWidget);
+    expect(find.text('走失是示例，其他是实际的'), findsOneWidget);
+    expect(_key('event-hit-${nowMs - 60000}-heart'), findsOneWidget);
+    expect(find.textContaining('安静时心率 195 次/分'), findsOneWidget);
+    expect(_key('event-2026-11-01-impact'), findsNothing); // 冲击の示例は消える
+    expect(_key('event-2026-10-30-lost'), findsOneWidget); // 走失は示例のまま
+
+    await tester.tap(_key('emergency-heart'));
+    await tester.pumpAndSettle();
+    expect(find.text('实际（试用：自动测的心率还在验证）'), findsOneWidget);
+    expect(_key('event-hit-${nowMs - 60000}-heart'), findsOneWidget);
   });
 
   testWidgets('幅 320 でもはみ出さない', (WidgetTester tester) async {

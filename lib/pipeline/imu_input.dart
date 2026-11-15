@@ -302,10 +302,22 @@ class FakeImuGenerator {
   final math.Random _rng;
   int _i = 0;
 
+  /// T34-G：「模拟摔倒」を始めた時刻（秒）。null ならなし。
+  double? fallFromS;
+
+  /// 摔倒の長さ：0.3 秒のぶつかり → 横倒しで静止 → 最後の 3 秒でゆっくり起き上がる。
+  static const double fallLengthS = 150;
+
+  bool _inFall(double t) {
+    final double? f = fallFromS;
+    return f != null && t >= f && t < f + fallLengthS;
+  }
+
   double get cycleS => scenario.fold(0.0, (double a, FakePhase p) => a + p.seconds);
 
   /// 時刻 t（秒、最初から）の動き。
   String labelAt(double t) {
+    if (_inFall(t)) return 'fall';
     double x = t % cycleS;
     for (final FakePhase p in scenario) {
       if (x < p.seconds) return p.label;
@@ -335,6 +347,19 @@ class FakeImuGenerator {
     double ax = 0.02 * _n(), ay = 0.02 * _n(), az = _g + 0.02 * _n();
     double gx = 0.002 * _n(), gy = 0.002 * _n(), gz = 0.002 * _n();
     switch (labelAt(t)) {
+      case 'fall':
+        {
+          final double u = t - fallFromS!;
+          // 横倒し：重力が z から x へ（90°）。最後の 3 秒で戻る（1 秒に 30° なので「急な変化」にならない）
+          final double back = u > fallLengthS - 3 ? (u - (fallLengthS - 3)) / 3 : 0;
+          final double th = (1 - back) * math.pi / 2;
+          ax = _g * math.sin(th) + 0.02 * _n();
+          az = _g * math.cos(th) + 0.02 * _n();
+          if (u < 0.3) {
+            ax += 18; // ぶつかり（約 2.8 g）
+            gz += 6;
+          }
+        }
       case 'walk':
         ax += 3.0 * math.sin(w + 0.3);
         ay += 1.5 * math.sin(2 * w + 1.0);
@@ -404,6 +429,14 @@ class FakeImuInput extends ImuInput {
   void setLinked(bool v) {
     if (v == _linked) return;
     _linked = v;
+    notifyListeners();
+  }
+
+  /// T34-G：「模拟摔倒」。今の時刻から、ぶつかって横倒し → 2 分半ほぼ動かない。
+  void injectFall() {
+    final FakeImuGenerator? g = gen;
+    if (g == null) return;
+    g.fallFromS = elapsedS;
     notifyListeners();
   }
 
