@@ -197,7 +197,7 @@ class _BigButton extends StatelessWidget {
             ? Icons.bluetooth_searching
             : analyzing
                 ? Icons.hourglass_bottom
-                : Icons.favorite;
+                : Icons.favorite_border;
 
     // 外枠表示にするのは測定中と準備中。どちらも「もう一度押せば止まる」状態。
     final bool outlined = measuring || preparing;
@@ -253,7 +253,7 @@ class _BigButton extends StatelessWidget {
                 Icon(icon,
                     size: 42,
                     color:
-                        outlined ? AppColors.accent : const Color(0xFFFFF7EF)),
+                        outlined ? AppColors.accent : AppColors.onHero),
                 const SizedBox(height: 10),
                 Text(label,
                     style: TextStyle(
@@ -261,7 +261,7 @@ class _BigButton extends StatelessWidget {
                       fontWeight: FontWeight.w800,
                       color: outlined
                           ? AppColors.accent
-                          : const Color(0xFFFFF7EF),
+                          : AppColors.onHero,
                     )),
                 if (sub != null)
                   Padding(
@@ -273,7 +273,7 @@ class _BigButton extends StatelessWidget {
                                 measuring ? FontWeight.w700 : FontWeight.w400,
                             color: outlined
                                 ? AppColors.textSecondary
-                                : const Color(0xFFFFF7EF)
+                                : AppColors.onHero
                                     .withValues(alpha: 0.85))),
                   ),
               ],
@@ -355,7 +355,7 @@ class _LiveCard extends StatelessWidget {
               padding: const EdgeInsets.only(top: 10),
               child: Text(s.rateTooLowWarning,
                   style:
-                      const TextStyle(fontSize: 12, color: AppColors.accent)),
+                      const TextStyle(fontSize: 12, color: AppColors.warn)),
             ),
           // 2つの数え方が食い違ったら、その場で言う。あとで履歴を見て
           // 「あの数字は何だったのか」と考えることになるのを避ける。
@@ -371,7 +371,7 @@ class _LiveCard extends StatelessWidget {
               padding: const EdgeInsets.only(top: 10),
               child: Text(s.rateDisagreeWarning,
                   style: const TextStyle(
-                      fontSize: 12, height: 1.5, color: AppColors.accent)),
+                      fontSize: 12, height: 1.5, color: AppColors.warn)),
             ),
           const Divider(height: 22, color: AppColors.divider),
           Wrap(
@@ -394,7 +394,7 @@ class _LiveCard extends StatelessWidget {
               padding: const EdgeInsets.only(top: 10),
               child: Text(s.tooManyDropsWarning,
                   style:
-                      const TextStyle(fontSize: 12, color: AppColors.accent)),
+                      const TextStyle(fontSize: 12, color: AppColors.warn)),
             ),
         ],
       ),
@@ -450,19 +450,19 @@ class _ResultCard extends StatelessWidget {
               child: Container(
                 padding: const EdgeInsets.all(11),
                 decoration: BoxDecoration(
-                  color: AppColors.accent.withValues(alpha: 0.07),
+                  color: AppColors.warn.withValues(alpha: 0.07),
                   borderRadius: BorderRadius.circular(11),
                 ),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
                     const Icon(Icons.info_outline,
-                        size: 16, color: AppColors.accent),
+                        size: 16, color: AppColors.warn),
                     const SizedBox(width: 7),
                     Expanded(
                       child: Text(_caveatText(s, record)!,
                           style: const TextStyle(
-                              fontSize: 12.5, color: AppColors.accent)),
+                              fontSize: 12.5, color: AppColors.warn)),
                     ),
                   ],
                 ),
@@ -509,7 +509,7 @@ class _ResultCard extends StatelessWidget {
               padding: const EdgeInsets.only(top: 12),
               child: Text(s.rateDisagreeWarning,
                   style: const TextStyle(
-                      fontSize: 12, height: 1.5, color: AppColors.accent)),
+                      fontSize: 12, height: 1.5, color: AppColors.warn)),
             ),
           if (record != null) ...<Widget>[
             const Divider(height: 20, color: AppColors.divider),
@@ -559,7 +559,7 @@ class _QualityChip extends StatelessWidget {
       VitalsQuality.fair =>
         (s.qualityFair, AppColors.accent2, Icons.error_outline),
       VitalsQuality.unusable =>
-        (s.qualityUnusable, AppColors.accent, Icons.cancel),
+        (s.qualityUnusable, AppColors.warn, Icons.cancel),
     };
     // 色だけで意味を伝えない。アイコンと文字を必ず添える。
     return Container(

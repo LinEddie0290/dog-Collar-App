@@ -1,6 +1,6 @@
 /// T35：ホームの「白い水」の色・板块ごとの色とアイコン。
 /// 画面イメージ：首輪開発計画/03_設計メモ/T35_画面イメージ/ホーム画面イメージ_v1_白。
-/// ほかのタブの色（app_colors.dart）はデザイナーと話すまで今のまま。
+/// アプリ全体の色（app_colors.dart・theme.dart）も同じ系統の水色にそろえた（D-056）。
 library;
 
 import 'package:flutter/material.dart';

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../data/daily_summary.dart';
 import '../data/health_items.dart';
+import '../data/health_series.dart';
 import '../data/home_snapshot.dart';
 import '../l10n/summary_text.dart';
 import '../state/collar_link.dart';
@@ -170,8 +171,15 @@ class _TodayPageState extends State<TodayPage> {
                     snap: snap,
                     now: _nowLine(),
                     footer: _t.alertsToday(snap.alerts.length),
+                    recording: m?.running ?? false,
                     ripples: _ripples,
-                    onBubble: (BubbleData b) => showBoardSheet(context, b, onMore: () => _openBoard(b.board)),
+                    onBubble: (BubbleData b) => showBoardSheet(
+                      context,
+                      b,
+                      // その板块の代表の項目の 14 日（健康タブと同じ計算）
+                      series: buildItemSeries(boardInfo(b.board).lead, today: today, real: _bundle, demoAll: _demo),
+                      onMore: () => _openBoard(b.board),
+                    ),
                     onCore: _openRecording,
                   ),
                 ),
@@ -294,6 +302,7 @@ class _Stage extends StatelessWidget {
     required this.snap,
     required this.now,
     required this.footer,
+    required this.recording,
     required this.ripples,
     required this.onBubble,
     required this.onCore,
@@ -303,6 +312,9 @@ class _Stage extends StatelessWidget {
   final HomeSnapshot snap;
   final NowLine now;
   final String footer;
+
+  /// 記録中か（真ん中の球の弧）。
+  final bool recording;
   final GlobalKey<WaterRipplesState> ripples;
   final void Function(BubbleData b) onBubble;
   final VoidCallback onCore;
@@ -350,6 +362,7 @@ class _Stage extends StatelessWidget {
                 now: now,
                 footer: footer,
                 size: core,
+                recording: recording,
                 onPressStart: () => ripples.currentState?.add(c, WaterColors.aqua, startRadius: core / 2, spread: 90),
                 onTap: onCore,
               ),

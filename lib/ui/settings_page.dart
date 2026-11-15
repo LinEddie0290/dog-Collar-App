@@ -365,7 +365,8 @@ class _SectionCard extends StatelessWidget {
     return Container(
       decoration: glassCard(),
       clipBehavior: Clip.antiAlias,
-      child: Column(children: children),
+      // stretch：中身が短い行（文字だけの行）も左にそろえる（前は真ん中に寄っていた）
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: children),
     );
   }
 }

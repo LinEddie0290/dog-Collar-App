@@ -163,10 +163,22 @@ class _Highlight extends StatelessWidget {
 }
 
 /// 真ん中の球（ホームボタン）：「现在」・今の状態・続いている時間・今日の提醒の数。
+/// ふちの内側に細い輪。記録中だけ、その上に弧が出る（数字の意味はない。「今記録している」の印）。
 class CoreBubble extends StatelessWidget {
-  const CoreBubble({super.key, required this.now, this.footer, this.size = 164, this.onTap, this.onPressStart});
+  const CoreBubble({
+    super.key,
+    required this.now,
+    this.footer,
+    this.size = 164,
+    this.recording = false,
+    this.onTap,
+    this.onPressStart,
+  });
 
   final NowLine now;
+
+  /// 記録中なら true（輪の上に弧を出す）。
+  final bool recording;
 
   /// 一番下の小さい文（例：今天没有提醒）。
   final String? footer;
@@ -209,6 +221,15 @@ class CoreBubble extends StatelessWidget {
               ),
               Positioned.fill(child: ClipOval(child: CustomPaint(painter: _WavePainter()))),
               const Positioned.fill(child: _Highlight()),
+              Positioned.fill(
+                child: Padding(
+                  padding: EdgeInsets.all(size * 0.05),
+                  child: CustomPaint(
+                    key: ValueKey<String>(recording ? 'core-ring-on' : 'core-ring-off'),
+                    painter: _RingPainter(active: recording),
+                  ),
+                ),
+              ),
               Padding(
                 padding: EdgeInsets.all(size * 0.14),
                 child: Center(
@@ -241,6 +262,42 @@ class CoreBubble extends StatelessWidget {
       ),
     );
   }
+}
+
+/// 球のふちの内側の輪。[active]（記録中）なら上から時計回りに 8 割ほどの弧を重ねる。動かない。
+class _RingPainter extends CustomPainter {
+  const _RingPainter({required this.active});
+
+  final bool active;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final Offset c = size.center(Offset.zero);
+    final double r = math.min(size.width, size.height) / 2 - 2;
+    canvas.drawCircle(
+      c,
+      r,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 3
+        ..color = Colors.white.withValues(alpha: 0.45),
+    );
+    if (!active) return;
+    final Rect rect = Rect.fromCircle(center: c, radius: r);
+    final Paint arc = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 3
+      ..strokeCap = StrokeCap.round
+      ..shader = const SweepGradient(
+        colors: <Color>[Color(0xFF19C8E8), Color(0xFF7D8BFF), Color(0xFF19C8E8)],
+        stops: <double>[0, 0.82, 1],
+        transform: GradientRotation(-math.pi / 2),
+      ).createShader(rect);
+    canvas.drawArc(rect, -math.pi / 2, 2 * math.pi * 0.82, false, arc);
+  }
+
+  @override
+  bool shouldRepaint(covariant _RingPainter old) => old.active != active;
 }
 
 /// 球の下の水面（動かない。電池と、テストの pumpAndSettle のため）。

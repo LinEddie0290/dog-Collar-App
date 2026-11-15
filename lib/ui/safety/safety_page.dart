@@ -183,7 +183,7 @@ class _EmergencyTile extends StatelessWidget {
           decoration: glassCard(radius: 18),
           child: Row(
             children: <Widget>[
-              Icon(emergencyIcon(spec.kind), color: WaterColors.alert),
+              Icon(emergencyIcon(spec.kind), color: WaterColors.aqua),
               const SizedBox(width: 10),
               Expanded(
                 child: Column(
@@ -230,7 +230,7 @@ class EventRow extends StatelessWidget {
             child: Text('${shortDate(e.date)}\n${e.timeText}',
                 style: const TextStyle(fontSize: 11, color: WaterColors.sub, height: 1.3)),
           ),
-          Icon(emergencyIcon(e.kind), size: 18, color: WaterColors.alert),
+          Icon(emergencyIcon(e.kind), size: 18, color: WaterColors.aqua),
           const SizedBox(width: 8),
           Expanded(
             child: Column(

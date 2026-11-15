@@ -212,7 +212,7 @@ class _RecordTileState extends State<_RecordTile> {
     final (Color color, IconData icon, String qLabel) = switch (r.effectiveQuality) {
       'good' => (AppColors.connected, Icons.check_circle, s.qualityGood),
       'fair' => (AppColors.accent2, Icons.error_outline, s.qualityFair),
-      _ => (AppColors.accent, Icons.cancel, s.qualityUnusable),
+      _ => (AppColors.warn, Icons.cancel, s.qualityUnusable),
     };
     final String? caveat = _caveatText(s, r);
 

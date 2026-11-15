@@ -1,34 +1,45 @@
 /// T35：泡を押したときに下から出る、板块の簡単な詳細。
-/// 今日の値・提醒・その板块の項目（実际数据／示例）。くわしいページは「健康」タブで作る。
+/// 今日の値・代表の項目の 14 日の線・提醒・その板块の項目（実际数据／示例）。くわしいページは「健康」タブ。
 library;
 
 import 'package:flutter/material.dart';
 
 import '../../data/health_items.dart';
+import '../../data/health_series.dart';
 import '../../data/home_snapshot.dart';
+import '../health/health_text.dart';
+import '../health/series_chart.dart';
 import 'water_style.dart';
 
+/// [series] があれば、その項目（板块の代表）の 14 日の線を出す。
 /// [onMore] があれば「查看更多」ボタン（シートを閉じてから呼ぶ）。
-Future<void> showBoardSheet(BuildContext context, BubbleData data, {VoidCallback? onMore}) {
+Future<void> showBoardSheet(BuildContext context, BubbleData data, {ItemSeries? series, VoidCallback? onMore}) {
   return showModalBottomSheet<void>(
     context: context,
     showDragHandle: true,
     backgroundColor: Colors.white,
-    shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(28))),
-    builder: (BuildContext _) => BoardSheet(data: data, onMore: onMore),
+    shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(30))),
+    builder: (BuildContext _) => BoardSheet(data: data, series: series, onMore: onMore),
   );
 }
 
 class BoardSheet extends StatelessWidget {
-  const BoardSheet({super.key, required this.data, this.onMore});
+  const BoardSheet({super.key, required this.data, this.series, this.onMore});
 
   final BubbleData data;
+
+  /// 板块の代表の項目の日々の値（14 日の線に使う）。null か、値が 1 つもなければ線は出さない。
+  final ItemSeries? series;
   final VoidCallback? onMore;
 
   @override
   Widget build(BuildContext context) {
     final BoardInfo info = boardInfo(data.board);
     final Color c = boardColor(data.board);
+    final ItemSeries? ser = series;
+    final List<double?> last14 = <double?>[for (final ItemDay d in ser?.recent14 ?? const <ItemDay>[]) d.value];
+    final bool hasChart = last14.any((double? v) => v != null);
+    final String diff = ser == null ? '' : diffText(ser);
     return SafeArea(
       top: false,
       child: SingleChildScrollView(
@@ -59,6 +70,22 @@ class BoardSheet extends StatelessWidget {
                         ? '今天还没有数据（开始记录以后会有）'
                         : (data.trial ? '今天的数据（试用：用模拟数据学的，还没有用真的狗确认）' : '今天的数据（这个手机算出来的）')),
                 style: const TextStyle(fontSize: 12, color: WaterColors.sub)),
+            if (ser != null && hasChart) ...<Widget>[
+              const SizedBox(height: 14),
+              Text('过去 14 天：${ser.item.name}', style: const TextStyle(fontSize: 12, color: WaterColors.sub)),
+              const SizedBox(height: 4),
+              SizedBox(
+                key: ValueKey<String>('board-sheet-chart-${data.board.name}'),
+                height: 96,
+                width: double.infinity,
+                child: SeriesChart(values: last14, color: c, usual: ser.usual),
+              ),
+              if (diff.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: 2),
+                  child: Text(diff, style: const TextStyle(fontSize: 12, color: WaterColors.value)),
+                ),
+            ],
             if (data.alert != null) ...<Widget>[
               const SizedBox(height: 12),
               Container(

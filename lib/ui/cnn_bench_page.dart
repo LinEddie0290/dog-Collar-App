@@ -67,7 +67,7 @@ class _CnnBenchPageState extends State<CnnBenchPage> {
         children: <Widget>[
           Text(
             kReleaseMode ? '模式：release（可以用这个数字）' : '模式：debug（数字会慢很多，只看对不对）',
-            style: TextStyle(fontSize: 13, color: kReleaseMode ? AppColors.textSecondary : AppColors.accent),
+            style: TextStyle(fontSize: 13, color: kReleaseMode ? AppColors.textSecondary : AppColors.warn),
           ),
           const SizedBox(height: 12),
           FilledButton.icon(
@@ -77,7 +77,7 @@ class _CnnBenchPageState extends State<CnnBenchPage> {
             label: Text(_running ? '测量中…' : '开始（200 个窗口 × 5 次）'),
           ),
           const SizedBox(height: 20),
-          if (_error != null) Text(_error!, style: const TextStyle(color: AppColors.accent)),
+          if (_error != null) Text(_error!, style: const TextStyle(color: AppColors.warn)),
           if (r != null) ...<Widget>[
             _row('结果', r.ok ? '和 PyTorch 一样 ✔' : '和 PyTorch 不一样 ✘'),
             _row('标签一致', '${r.sameLabel} / ${r.windows}'),

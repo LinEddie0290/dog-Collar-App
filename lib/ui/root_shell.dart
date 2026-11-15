@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../data/daily_summary.dart';
 import '../l10n/app_strings.dart';
@@ -9,12 +10,14 @@ import '../state/locale_controller.dart';
 import '../state/location_controller.dart';
 import '../state/vitals_session.dart';
 import 'health/health_page.dart';
+import 'home/water_background.dart';
 import 'map_page.dart';
 import 'measure_page.dart';
 import 'safety/safety_page.dart';
 import 'settings_page.dart';
 import 'today_page.dart';
 import 'vitals_history_page.dart';
+import 'water_tab_bar.dart';
 
 /// 下のタブ（T35・D-051）：今天・健康・测定・安全・我的。
 class RootShell extends StatefulWidget {
@@ -91,21 +94,46 @@ class _RootShellState extends State<RootShell> {
       ),
     ];
 
-    return Scaffold(
-      body: SafeArea(
-        bottom: false,
-        child: IndexedStack(index: _index, children: pages),
-      ),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: _index,
-        onDestinationSelected: (int i) => setState(() => _index = i),
-        destinations: <NavigationDestination>[
-          NavigationDestination(icon: const Icon(Icons.wb_sunny_outlined), label: strings.navToday),
-          NavigationDestination(icon: const Icon(Icons.favorite_outline), label: strings.navHealth),
-          NavigationDestination(icon: const Icon(Icons.monitor_heart_outlined), label: strings.navMeasure),
-          NavigationDestination(icon: const Icon(Icons.shield_outlined), label: strings.navSafety),
-          NavigationDestination(icon: const Icon(Icons.person_outline), label: strings.navMine),
-        ],
+    final List<WaterTab> tabs = <WaterTab>[
+      WaterTab(WaterTabIcon.today, strings.navToday),
+      WaterTab(WaterTabIcon.health, strings.navHealth),
+      WaterTab(WaterTabIcon.measure, strings.navMeasure),
+      WaterTab(WaterTabIcon.safety, strings.navSafety),
+      WaterTab(WaterTabIcon.mine, strings.navMine),
+    ];
+
+    // 背景（白い水）は画面いっぱい（時計の帯の下まで）。その上にページと、浮いたタブのバー。
+    // ページはバーの上で終わる（バーの下にもぐらない：一番下の行も押せるように）。
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: SystemUiOverlayStyle.dark,
+      child: Scaffold(
+        body: WaterBackground(
+          child: SafeArea(
+            bottom: false,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: <Widget>[
+                Expanded(
+                  // 下の余白（ホームの線のところ）はタブのバーが受け持つので、ページには渡さない。
+                  // Builder：SafeArea が上の余白を取ったあとの MediaQuery から作るため
+                  child: Builder(
+                    builder: (BuildContext inner) => MediaQuery.removePadding(
+                      context: inner,
+                      removeBottom: true,
+                      // sizing を expand にしないと、ページが中身の高さまでしか広がらない（背景が途中で切れる）
+                      child: IndexedStack(index: _index, sizing: StackFit.expand, children: pages),
+                    ),
+                  ),
+                ),
+                WaterTabBar(
+                  tabs: tabs,
+                  index: _index,
+                  onSelect: (int i) => setState(() => _index = i),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }

@@ -66,7 +66,7 @@ class MonitorBar extends StatelessWidget {
                         Text(state, style: const TextStyle(fontSize: 13, color: AppColors.textPrimary)),
                         if (inputLine != null)
                           Text(inputLine, style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
-                        if (err != null) Text(err, style: const TextStyle(fontSize: 12, color: AppColors.accent)),
+                        if (err != null) Text(err, style: const TextStyle(fontSize: 12, color: AppColors.warn)),
                         if (r.lastError != null && monitor.running)
                           Text('处理：${r.lastError}',
                               style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),

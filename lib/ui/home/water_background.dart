@@ -1,4 +1,8 @@
 /// T35：ホームの背景（白から水色へ・上からの光）と、泡のまわりの軌道の線。どちらも動かない。
+///
+/// 背景は使える広さいっぱいに広がる（中身が短くても途中で切れない）。
+/// [WaterBackground] の中にもう 1 つ [WaterBackground] があるとき（タブの外枠が背景を描いていて、
+/// 中のページも自分で持っているとき）は、内側は何も描かない（二重にしない）。
 library;
 
 import 'dart:math' as math;
@@ -14,49 +18,62 @@ class WaterBackground extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: <Color>[WaterColors.bgTop, WaterColors.bgMid, WaterColors.bgBottom],
-          stops: <double>[0, 0.6, 1],
+    // 外側がもう背景を描いている
+    if (context.getInheritedWidgetOfExactType<_WaterScope>() != null) return child;
+    return SizedBox.expand(
+      child: DecoratedBox(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: <Color>[WaterColors.bgTop, WaterColors.bgMid, WaterColors.bgBottom],
+            stops: <double>[0, 0.6, 1],
+          ),
         ),
-      ),
-      child: Stack(
-        children: <Widget>[
-          // 上から差す光（ぼかした明るいところ）
-          const Positioned.fill(
-            child: IgnorePointer(
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  gradient: RadialGradient(
-                    center: Alignment(-0.6, -0.7),
-                    radius: 0.9,
-                    colors: <Color>[Color(0x99FFFFFF), Color(0x00FFFFFF)],
-                  ),
-                ),
-              ),
-            ),
-          ),
-          const Positioned.fill(
-            child: IgnorePointer(
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  gradient: RadialGradient(
-                    center: Alignment(0.7, -0.4),
-                    radius: 0.7,
-                    colors: <Color>[Color(0x66C8F5FF), Color(0x00C8F5FF)],
-                  ),
-                ),
-              ),
-            ),
-          ),
-          child,
-        ],
+        child: Stack(
+          fit: StackFit.expand,
+          children: <Widget>[
+            ..._lights,
+            _WaterScope(child: child),
+          ],
+        ),
       ),
     );
   }
+
+  /// 上から差す光（ぼかした明るいところ）。
+  static const List<Widget> _lights = <Widget>[
+    IgnorePointer(
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          gradient: RadialGradient(
+            center: Alignment(-0.6, -0.7),
+            radius: 0.9,
+            colors: <Color>[Color(0x99FFFFFF), Color(0x00FFFFFF)],
+          ),
+        ),
+      ),
+    ),
+    IgnorePointer(
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          gradient: RadialGradient(
+            center: Alignment(0.7, -0.4),
+            radius: 0.7,
+            colors: <Color>[Color(0x66C8F5FF), Color(0x00C8F5FF)],
+          ),
+        ),
+      ),
+    ),
+  ];
+}
+
+/// 「この下はもう背景が描かれている」の印。
+class _WaterScope extends InheritedWidget {
+  const _WaterScope({required super.child});
+
+  @override
+  bool updateShouldNotify(covariant _WaterScope oldWidget) => false;
 }
 
 /// 泡の軌道（内側は実線、外側は点線）と、真ん中から泡への点線。

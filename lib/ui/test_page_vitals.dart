@@ -88,7 +88,7 @@ class VitalsCard extends StatelessWidget {
             ],
           ),
           Text(status, style: const TextStyle(fontSize: 12.5, color: AppColors.textSecondary)),
-          if (fallback != null) Text(fallback, style: const TextStyle(fontSize: 12, color: AppColors.accent)),
+          if (fallback != null) Text(fallback, style: const TextStyle(fontSize: 12, color: AppColors.warn)),
           const SizedBox(height: 6),
           Wrap(
             spacing: 6,

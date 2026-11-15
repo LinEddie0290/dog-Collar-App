@@ -77,6 +77,34 @@ void main() {
     expect(find.text('没有在记录'), findsOneWidget);
   });
 
+  testWidgets('真ん中の球：記録中だけ弧の印が出る', (WidgetTester tester) async {
+    await tester.pumpWidget(_wrap(const CoreBubble(now: NowLine('没有在记录', null))));
+    expect(find.byKey(const ValueKey<String>('core-ring-off')), findsOneWidget);
+    expect(find.byKey(const ValueKey<String>('core-ring-on')), findsNothing);
+
+    await tester.pumpWidget(_wrap(const CoreBubble(now: NowLine('休息中', '刚安静下来'), recording: true)));
+    expect(find.byKey(const ValueKey<String>('core-ring-on')), findsOneWidget);
+    expect(find.byKey(const ValueKey<String>('core-ring-off')), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('背景：中身が短くても画面いっぱい。内側の背景は描かない', (WidgetTester tester) async {
+    await tester.pumpWidget(const MaterialApp(
+      home: Scaffold(
+        body: WaterBackground(
+          child: WaterBackground(
+            child: Align(alignment: Alignment.topLeft, child: SizedBox(width: 10, height: 10)),
+          ),
+        ),
+      ),
+    ));
+    // 上から下への色の箱は 1 つ（外側だけ）で、画面（800×600）いっぱい
+    final Finder boxes = find.byWidgetPredicate((Widget w) =>
+        w is DecoratedBox && w.decoration is BoxDecoration && (w.decoration as BoxDecoration).gradient is LinearGradient);
+    expect(boxes, findsOneWidget);
+    expect(tester.getSize(boxes), const Size(800, 600));
+  });
+
   testWidgets('波紋：出して、終わったら消える（動くものを残さない）', (WidgetTester tester) async {
     final GlobalKey<WaterRipplesState> key = GlobalKey<WaterRipplesState>();
     await tester.pumpWidget(_wrap(WaterRipples(key: key, child: const SizedBox(width: 300, height: 300))));

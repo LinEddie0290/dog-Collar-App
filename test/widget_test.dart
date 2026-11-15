@@ -25,6 +25,10 @@ void main() {
     expect(find.text('履歴'), findsNothing);
     // 最初は「今天」
     expect(find.byKey(const ValueKey<String>('today-page')), findsOneWidget);
+    // 下のバーは白い水のバー。ページはバーの上までいっぱいに広がる（背景が途中で切れない）：
+    // 画面 600 − バー（上の余白 6＋高さ 64＋下の余白 14）
+    expect(find.byKey(const ValueKey<String>('water-tab-bar')), findsOneWidget);
+    expect(tester.getSize(find.byKey(const ValueKey<String>('today-page'))), const Size(800, 600 - 84));
 
     // 健康タブ：六大板块の一覧
     await tester.tap(find.text('健康'));

@@ -172,6 +172,29 @@ void main() {
     expect(_key('item-row-activity'), findsOneWidget);
   });
 
+  testWidgets('泡の詳細：値があれば代表の項目の 14 日の線、なければ出さない', (WidgetTester tester) async {
+    await tester.pumpWidget(_app(const TodayPage(clock: _clock)));
+    await tester.pumpAndSettle();
+
+    // 本物なし：睡眠は値がないので線は出ない
+    await tester.tap(_key('bubble-sleep'));
+    await tester.pumpAndSettle();
+    expect(_key('board-sheet-sleep'), findsOneWidget);
+    expect(_key('board-sheet-chart-sleep'), findsNothing);
+    await tester.tapAt(const Offset(10, 10));
+    await tester.pumpAndSettle();
+    expect(_key('board-sheet-sleep'), findsNothing);
+
+    // 演示：示例の値で線が出る
+    await tester.tap(_key('home-demo-toggle'));
+    await tester.pumpAndSettle();
+    await tester.tap(_key('bubble-sleep'));
+    await tester.pumpAndSettle();
+    expect(_key('board-sheet-chart-sleep'), findsOneWidget);
+    expect(find.text('过去 14 天：睡眠时长・区间・中断'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('首輪の表示：つながっていない', (WidgetTester tester) async {
     final CollarLink link = CollarLink();
     await tester.pumpWidget(_app(TodayPage(link: link, clock: _clock)));
