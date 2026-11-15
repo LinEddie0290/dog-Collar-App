@@ -19,6 +19,7 @@ import 'package:collar_data/collar_data.dart';
 import 'package:collar_pipeline/collar_pipeline.dart';
 import 'package:flutter/foundation.dart';
 
+import '../data/safe_zone.dart';
 import 'auto_vitals.dart';
 import 'cnn_models.dart';
 import 'imu_input.dart';
@@ -353,6 +354,14 @@ class PipelineRunner extends ChangeNotifier {
     final PipelineSession s = _session ?? startSession();
     s.vitals.add(v);
     unawaited(store?.appendVital(s.id, v, extra: extra));
+  }
+
+  /// T36：GPS の位置を記録に残す（処理の流れには入れない。L6 で距離を確かめるため）。
+  /// 記録をしていない（セッションがない）ときは残さない。
+  void addGps(LocationFix f) {
+    final PipelineSession? s = _session;
+    if (s == null) return;
+    unawaited(store?.appendGps(s.id, f));
   }
 
   /// 正解のラベル（その時刻からこの動き）。Unity・偽のデータの答え、D のボタンから。

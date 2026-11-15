@@ -6,6 +6,7 @@
 library;
 
 import 'health_series.dart' show lastDates;
+import 'safe_zone.dart';
 
 enum EmergencyKind { fall, heart, lost, impact }
 
@@ -54,7 +55,10 @@ EmergencySpec emergencySpec(EmergencyKind k) => emergencySpecs.firstWhere((Emerg
 
 class EmergencyEvent {
   const EmergencyEvent({required this.date, required this.minuteOfDay, required this.kind, required this.detail,
-      required this.outcome, this.demo = true});
+      required this.outcome, this.demo = true, this.id});
+
+  /// 画面の key（本物の記録は同じ日に何件もあるので、時刻で区別する）。null なら日付と種類。
+  final String? id;
 
   /// その土地の日付（YYYY-MM-DD）。
   final String date;
@@ -121,11 +125,38 @@ int _hash(String s) {
   return h;
 }
 
+// ───────── 本物の記録（T36：安全区の出入り） ─────────
+
+/// 安全区の出入り（[ZoneEvent]）を、緊急の記録の形にする（新しい順・[today] までの [days] 日）。
+/// 時刻はその土地（UTC＋8、1 日まとめと同じ）。
+List<EmergencyEvent> zoneEmergencyEvents(List<ZoneEvent> events, String today, {int days = 7}) {
+  final Set<String> keep = lastDates(today, days).toSet();
+  final List<EmergencyEvent> out = <EmergencyEvent>[];
+  for (final ZoneEvent e in events) {
+    final DateTime local = DateTime.fromMillisecondsSinceEpoch(e.tMs, isUtc: true).add(const Duration(hours: 8));
+    final String date = '${local.year}-${local.month.toString().padLeft(2, '0')}-${local.day.toString().padLeft(2, '0')}';
+    if (!keep.contains(date)) continue;
+    out.add(EmergencyEvent(
+      date: date,
+      minuteOfDay: local.hour * 60 + local.minute,
+      kind: EmergencyKind.lost,
+      detail: '${e.title}（离家 ${distanceText(e.distanceM)}）',
+      outcome: switch (e.kind) {
+        ZoneEventKind.exit => '项圈和手机连着（和主人在一起？）',
+        ZoneEventKind.lost => '项圈和手机断开了，已通知',
+        ZoneEventKind.enter => '回来了',
+      },
+      demo: false,
+      id: 'event-zone-${e.tMs}-${e.kind.name}',
+    ));
+  }
+  return out;
+}
+
 // ───────── 今の安全の状態 ─────────
 
-/// 安全区（今は家だけ。LocationController.defaultHomeFence と同じ）。
-const String homeFenceName = '家';
-const int homeFenceRadiusM = 150;
+/// 安全区の 1 行（T36：家は地図を長押しして決める）。
+String zoneLine(SafeZone? z) => z == null ? '安全区：还没设（在地图上长按）' : '安全区：${z.name}（半径 ${z.radiusM.round()} m）';
 
 /// 首輪の 1 行。[connected] が null なら首輪の様子がわからない（表示しない）。
 /// [recording] で [lastReceivedMs] があれば「最后收到数据」。

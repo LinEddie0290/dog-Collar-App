@@ -17,6 +17,7 @@ import 'dart:io';
 import 'package:collar_pipeline/collar_pipeline.dart';
 import 'package:path_provider/path_provider.dart';
 
+import '../data/safe_zone.dart';
 import 'imu_input.dart';
 import 'pipeline_runner.dart';
 
@@ -102,6 +103,16 @@ class PipelineStore {
         't_us': m.tDevUs,
         'label': m.label,
         if (m.source.isNotEmpty) 'source': m.source,
+      });
+
+  /// T36：GPS の位置 1 つ（WGS84）。
+  Future<void> appendGps(String id, LocationFix f) => _append(id, <String, Object?>{
+        'rec': 'gps',
+        't_ms': f.tMs,
+        'lat': f.point.lat,
+        'lng': f.point.lng,
+        if (f.accuracyM != null) 'acc_m': f.accuracyM,
+        if (f.source.isNotEmpty) 'src': f.source,
       });
 
   /// D の取り消し。読むときに同じ時刻・ラベルのボタンの印を消す。

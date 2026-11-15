@@ -4,12 +4,17 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
 
+import 'package:collar_app/data/safe_zone.dart';
 import 'package:collar_app/pipeline/imu_input.dart';
 import 'package:collar_app/pipeline/pipeline_runner.dart';
+import 'package:collar_app/pipeline/pipeline_store.dart';
+import 'package:collar_app/state/app_notifier.dart';
 import 'package:collar_app/state/collar_link.dart';
 import 'package:collar_app/state/continuous_monitor.dart';
+import 'package:collar_app/state/location_controller.dart';
 import 'package:collar_pipeline/collar_pipeline.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 final WindowClassifier _clf = WindowClassifier.fromJson(
     jsonDecode(File('assets/models/cnn_imu_v1.json').readAsStringSync()) as Map<String, dynamic>);
@@ -143,6 +148,57 @@ void main() {
       expect(active.last + 2, inInclusiveRange(88, 92));
       expect(session.truth.map((TruthMark t) => t.label).toList(), <String>['still', 'walk', 'still']);
       expect(session.truth[1].tDevUs, 1000000 + 60000000);
+    });
+
+    test('T36：模拟の記録 → GPS が位置の管理と記録ファイルへ。外で「模拟断开」→ 可能走失の通知', () async {
+      SharedPreferences.setMockInitialValues(<String, Object>{});
+      final Directory tmp = await Directory.systemTemp.createTemp('t36');
+      addTearDown(() => tmp.delete(recursive: true));
+      int now = DateTime.utc(2026, 11, 1, 2).millisecondsSinceEpoch;
+      final PipelineStore store = PipelineStore(baseDir: () async => tmp.path);
+      final PipelineRunner runner = PipelineRunner(
+        loadClassifier: () async => _clf,
+        compute: (ChunkInput i) async => processChunk(i),
+        store: store,
+        nowMs: () => now,
+      );
+      final MemoryNotifier n = MemoryNotifier();
+      final LocationController lc = LocationController(notifier: n, nowMs: () => now, tick: null);
+      await lc.setHome(fakeDefaultHome, 100);
+      final FakeImuInput fake = FakeImuInput(nowMs: () => now, tick: const Duration(hours: 1));
+      final ContinuousMonitor m = ContinuousMonitor(
+          link: CollarLink(), runner: runner, location: lc, inputFactory: (InputKind k, ContinuousMonitor _) => fake);
+      m.kind = InputKind.fake;
+      await m.start();
+      expect(lc.attached, isTrue);
+      // 模拟の道：60 秒から東へ 1 m/s。185 秒ごろに 120 m（半径 100＋余裕 20）を越える
+      for (int s = 0; s < 200; s++) {
+        now += 1000;
+        fake.pump();
+        await Future<void>.delayed(Duration.zero);
+        await runner.idle();
+      }
+      expect(lc.state, ZoneState.outside);
+      expect(lc.lastEvent!.kind, ZoneEventKind.exit);
+      expect(n.shown, isEmpty);
+
+      fake.setLinked(false); // 「模拟断开」
+      expect(lc.state, ZoneState.lost);
+      expect(n.shown.single.title, '可能走失');
+
+      final String id = runner.session!.id;
+      await m.stop();
+      await store.idle();
+      expect(lc.attached, isFalse);
+      expect(lc.state, ZoneState.lost); // 止めても最後の状態は残す
+      final List<Map<String, dynamic>> gps = <Map<String, dynamic>>[
+        for (final String line in File('${tmp.path}/pipeline_sessions/$id.jsonl').readAsLinesSync())
+          if (line.isNotEmpty) jsonDecode(line) as Map<String, dynamic>,
+      ].where((Map<String, dynamic> r) => r['rec'] == 'gps').toList();
+      expect(gps.length, inInclusiveRange(199, 201)); // 模拟の 1 秒に 1 回
+      expect(gps.first['src'], 'fake');
+      expect(gps.last['t_ms'] as int, greaterThan(gps.first['t_ms'] as int));
+      lc.dispose();
     });
   });
 }

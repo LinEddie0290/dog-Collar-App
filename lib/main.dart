@@ -5,7 +5,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 
 import 'l10n/app_language.dart';
 import 'l10n/app_strings.dart';
-import 'state/collar_controller.dart';
+import 'state/app_notifier.dart';
 import 'state/locale_controller.dart';
 import 'data/measurement_store.dart';
 import 'state/location_controller.dart';
@@ -33,7 +33,6 @@ class CollarApp extends StatefulWidget {
 }
 
 class _CollarAppState extends State<CollarApp> {
-  final CollarController _controller = CollarController();
   final LocaleController _localeController = LocaleController();
   late final LocationController _locationController;
   final MeasurementStore _measurementStore = MeasurementStore();
@@ -51,7 +50,10 @@ class _CollarAppState extends State<CollarApp> {
   @override
   void initState() {
     super.initState();
-    _locationController = LocationController(collar: _controller);
+    // T36：位置は記録の入力から受け取る（古い CollarController はもう使わない）。通知は可能走失・回到安全区だけ
+    final LocalAppNotifier notifier = LocalAppNotifier();
+    unawaited(notifier.init()); // 通知の許可を最初に聞く（断られても画面の表示は出る）
+    _locationController = LocationController(notifier: notifier);
     _vitalsSession =
         VitalsSession(
       store: _measurementStore,
@@ -64,16 +66,17 @@ class _CollarAppState extends State<CollarApp> {
       saveRecord: _measurementStore.save,
     );
     _autoVitals.finishedListeners.add((VitalAttempt a) => unawaited(saver.save(a)));
-    _monitor = ContinuousMonitor(link: _collarLink, runner: _pipelineRunner, vitals: _vitalsSession);
+    _monitor = ContinuousMonitor(
+        link: _collarLink, runner: _pipelineRunner, vitals: _vitalsSession, location: _locationController);
     _liveSummary = PipelineSummaryRepository(store: _pipelineStore, changes: _pipelineRunner.dataVersion);
     unawaited(_collarLink.loadKnown());
     unawaited(_localeController.loadSaved());
     unawaited(_monitor.loadSaved());
+    unawaited(_locationController.loadSaved());
   }
 
   @override
   void dispose() {
-    _controller.dispose();
     _localeController.dispose();
     _locationController.dispose();
     _monitor.dispose();
@@ -121,7 +124,6 @@ class _CollarAppState extends State<CollarApp> {
             );
           },
           home: RootShell(
-            controller: _controller,
             localeController: _localeController,
             locationController: _locationController,
             vitalsSession: _vitalsSession,

@@ -118,6 +118,15 @@ class MonitorBar extends StatelessWidget {
                         onSelected: locked ? null : (_) => monitor.setInput(fakeSpeed: s),
                         visualDensity: VisualDensity.compact,
                       ),
+                  // T36：模拟の「BLE が切れた」（安全区の外で切れると「可能走失」）。記録中だけ
+                  if (monitor.input case final FakeImuInput f)
+                    FilterChip(
+                      key: const ValueKey<String>('fake-disconnect'),
+                      label: const Text('模拟断开'),
+                      selected: !f.linked,
+                      onSelected: (bool on) => f.setLinked(!on),
+                      visualDensity: VisualDensity.compact,
+                    ),
                 ],
               ),
             ],
