@@ -49,7 +49,7 @@ class AppStrings {
     required this.viewPastMeasurements,
     required this.tipsTitle,
     required this.tipSensorPlacement,
-    required this.tipPartFur,
+    required this.tipWaitCalm,
     required this.tipStayStill,
     required this.tipKeepPhoneClose,
     required this.liveStabilizing,
@@ -232,7 +232,7 @@ class AppStrings {
   final String viewPastMeasurements;
   final String tipsTitle;
   final String tipSensorPlacement;
-  final String tipPartFur;
+  final String tipWaitCalm;
   final String tipStayStill;
   final String tipKeepPhoneClose;
   final String liveStabilizing;
@@ -473,8 +473,8 @@ class AppStrings {
     collarSwitch: '切り替え',
     viewPastMeasurements: 'これまでの測定を見る',
     tipsTitle: '測るときのコツ',
-    tipSensorPlacement: 'センサーは左胸の下（心臓の下側）に当てる。ここが一番信号が強い',
-    tipPartFur: '毛をかき分けて、皮膚に密着させる',
+    tipSensorPlacement: '首輪をつける：センサーはのどの下、指 2 本が入るくらいのきつさ',
+    tipWaitCalm: '犬が伏せか座りで落ち着いてから測る。歩いているときは測らない',
     tipStayStill: 'できるだけ動かない状態で60秒',
     tipKeepPhoneClose: 'スマホは首輪の近くに置く',
     liveStabilizing: '安定するまで15秒ほどかかります',
@@ -643,8 +643,8 @@ class AppStrings {
     collarSwitch: 'Switch',
     viewPastMeasurements: 'View past measurements',
     tipsTitle: 'Getting a good reading',
-    tipSensorPlacement: 'Hold the sensor below the left chest, under the heart — the signal is strongest there',
-    tipPartFur: 'Part the fur so it sits against the skin',
+    tipSensorPlacement: 'Put the collar on: sensor under the throat, loose enough to fit two fingers',
+    tipWaitCalm: 'Measure once the dog is lying or sitting calmly — not while walking',
     tipStayStill: 'Keep as still as possible for 60 seconds',
     tipKeepPhoneClose: 'Keep the phone near the collar',
     liveStabilizing: 'Takes about 15 seconds to settle',
@@ -812,8 +812,8 @@ class AppStrings {
     collarSwitch: '切换',
     viewPastMeasurements: '查看历史测量',
     tipsTitle: '测量要点',
-    tipSensorPlacement: '把传感器贴在左胸下方（心脏下侧），这里信号最强',
-    tipPartFur: '拨开毛发，使其紧贴皮肤',
+    tipSensorPlacement: '项圈戴好：传感器在喉咙下面，松紧能放进 2 根手指',
+    tipWaitCalm: '等狗安静地趴着或坐着再测，不要在走动时测',
     tipStayStill: '尽量保持不动 60 秒',
     tipKeepPhoneClose: '手机放在项圈附近',
     liveStabilizing: '大约需要 15 秒才能稳定',
