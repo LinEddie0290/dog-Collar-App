@@ -1,0 +1,9 @@
+# 参照実装 infer.py を動かすのに必要（Python 3.10 でテスト済み）。
+# 初回は YAMNet(約17MB の SavedModel)を tensorflow_hub が自動DL。
+# オフラインにしたい場合は環境変数 YAMNET_DIR に SavedModel のパスを渡す。
+tensorflow-cpu==2.17.0
+tensorflow_hub==0.16.1
+numpy==1.26.4
+scipy==1.15.3
+soundfile==0.14.0
+PyYAML==6.0.3
