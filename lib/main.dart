@@ -11,6 +11,12 @@ import 'data/measurement_store.dart';
 import 'state/location_controller.dart';
 import 'state/collar_link.dart';
 import 'state/vitals_session.dart';
+import 'state/continuous_monitor.dart';
+import 'pipeline/auto_vitals.dart';
+import 'pipeline/pipeline_runner.dart';
+import 'pipeline/auto_vitals_history.dart';
+import 'pipeline/pipeline_store.dart';
+import 'pipeline/pipeline_summary_repository.dart';
 import 'ui/amap_init.dart';
 import 'ui/root_shell.dart';
 import 'ui/theme.dart';
@@ -33,6 +39,13 @@ class _CollarAppState extends State<CollarApp> {
   final MeasurementStore _measurementStore = MeasurementStore();
   final CollarLink _collarLink = CollarLink();
   late final VitalsSession _vitalsSession;
+  // T34-A：スマホの中の処理の流れ（受けた IMU → 毎日のまとめ）
+  final PipelineStore _pipelineStore = PipelineStore();
+  // T34-B：記録の中のデータから心拍を測る（自動・記録中の手動）
+  final AutoVitals _autoVitals = AutoVitals();
+  late final PipelineRunner _pipelineRunner = PipelineRunner(store: _pipelineStore, autoVitals: _autoVitals);
+  late final ContinuousMonitor _monitor;
+  late final PipelineSummaryRepository _liveSummary;
   bool _amapInitialized = false;
 
   @override
@@ -40,9 +53,22 @@ class _CollarAppState extends State<CollarApp> {
     super.initState();
     _locationController = LocationController(collar: _controller);
     _vitalsSession =
-        VitalsSession(store: _measurementStore, link: _collarLink);
+        VitalsSession(
+      store: _measurementStore,
+      link: _collarLink,
+      blockedReason: () => _monitor.running ? '正在记录：请在「我的 → 开发 → 记录・测试」的测试画面（📊）按「现在测」，不会断开' : null,
+    );
+    // 測れた（品質が悪いのも含む）ら、今の測定の履歴にも入れる（D-050 B3）。波形の画像つき
+    final AttemptHistorySaver saver = AttemptHistorySaver(
+      saveStrip: _measurementStore.saveRhythmStripPng,
+      saveRecord: _measurementStore.save,
+    );
+    _autoVitals.finishedListeners.add((VitalAttempt a) => unawaited(saver.save(a)));
+    _monitor = ContinuousMonitor(link: _collarLink, runner: _pipelineRunner, vitals: _vitalsSession);
+    _liveSummary = PipelineSummaryRepository(store: _pipelineStore, changes: _pipelineRunner.dataVersion);
     unawaited(_collarLink.loadKnown());
     unawaited(_localeController.loadSaved());
+    unawaited(_monitor.loadSaved());
   }
 
   @override
@@ -50,6 +76,9 @@ class _CollarAppState extends State<CollarApp> {
     _controller.dispose();
     _localeController.dispose();
     _locationController.dispose();
+    _monitor.dispose();
+    _pipelineRunner.dispose();
+    _autoVitals.dispose();
     _vitalsSession.dispose();
     _collarLink.dispose();
     super.dispose();
@@ -97,6 +126,8 @@ class _CollarAppState extends State<CollarApp> {
             locationController: _locationController,
             vitalsSession: _vitalsSession,
             collarLink: _collarLink,
+            monitor: _monitor,
+            liveSummary: _liveSummary,
           ),
         );
       },

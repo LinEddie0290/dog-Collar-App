@@ -175,7 +175,7 @@ class _GeofenceBanner extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
-        color: isExit ? AppColors.accent : AppColors.connected,
+        color: isExit ? AppColors.warn : AppColors.connected,
         borderRadius: BorderRadius.circular(12),
         boxShadow: <BoxShadow>[
           BoxShadow(color: Colors.black.withValues(alpha: 0.15), blurRadius: 10, offset: const Offset(0, 4)),

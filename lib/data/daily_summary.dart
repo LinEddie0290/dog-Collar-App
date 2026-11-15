@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart' show Listenable;
 import 'package:flutter/services.dart' show AssetBundle, rootBundle;
 
 /// パイプライン(T15)が出す 1日まとめ JSON(collar.daily_summary/0.1)。
@@ -118,6 +119,7 @@ class HistoryDay {
     this.sleepMin,
     this.itchCount,
     this.restHr,
+    this.restRr,
   });
 
   final String date;
@@ -126,6 +128,9 @@ class HistoryDay {
   final double? sleepMin;
   final double? itchCount;
   final double? restHr;
+
+  /// T35：安静時の呼吸（history の rest_rr）。
+  final double? restRr;
 
   static HistoryDay fromJson(Map<String, dynamic> json) {
     double? d(String k) => (json[k] as num?)?.toDouble();
@@ -136,8 +141,17 @@ class HistoryDay {
       sleepMin: d('sleep_min'),
       itchCount: d('itch_count'),
       restHr: d('rest_hr'),
+      restRr: d('rest_rr'),
     );
   }
+}
+
+/// 「每天」のページが読むところ。デモ（同梱の JSON）と本物（T34-A：スマホで計算した結果）。
+abstract class SummarySource {
+  Future<SummaryBundle> load();
+
+  /// 読み直す合図。なければ null。
+  Listenable? get changes;
 }
 
 /// 1日分の読み込み結果。JSON が壊れていても落とさず、その日を「読めない」にする。
@@ -150,16 +164,24 @@ class DayEntry {
 }
 
 class SummaryBundle {
-  const SummaryBundle({required this.dogId, required this.days, required this.history});
+  const SummaryBundle({
+    required this.dogId,
+    required this.days,
+    required this.history,
+    this.raw = const <String, Map<String, double>>{},
+  });
 
   final String dogId;
   final List<DayEntry> days;
   final List<HistoryDay> history;
+
+  /// 日付 → 生の数字（wear_min と出来事の種類ごとの分）。本物のデータのときだけ（T34 のテスト用）。
+  final Map<String, Map<String, double>> raw;
 }
 
 /// デモ用(T23):アプリに同梱した `assets/demo/<dog>/` から読む。
 /// T16 で本物の受け取り口(ファイル・サーバー)に差し替える。
-class DemoSummaryRepository {
+class DemoSummaryRepository implements SummarySource {
   DemoSummaryRepository({AssetBundle? bundle, this.dogId = 'dog_sim01'})
       : _bundle = bundle ?? rootBundle;
 
@@ -168,6 +190,10 @@ class DemoSummaryRepository {
 
   String get _base => 'assets/demo/$dogId';
 
+  @override
+  Listenable? get changes => null;
+
+  @override
   Future<SummaryBundle> load() async {
     final Map<String, dynamic> index =
         jsonDecode(await _bundle.loadString('$_base/index.json')) as Map<String, dynamic>;

@@ -1,0 +1,576 @@
+/// T34-A：受けた IMU を少しずつ collar_pipeline（Python と同じ数字が出る Dart 版）に通す。
+///
+/// 流れ：IMU のサンプルをためる → 約 30 秒ごとに「前の 15 秒＋新しい分」をまとめて
+/// 前処理 → CNN（別の isolate で）→ 窓（2 秒・1 秒ずらし）を足す → 状態判断と出来事を
+/// その接続（セッション）の全部の窓でやり直す → 保存（[PipelineStore]）。
+///
+/// 区切りの境目の扱い：
+/// * 区切りごとに窓の位置（1 秒の中のどこから始まるか）が少しずれるので、最初の窓を
+///   基準に **1 秒の格子に丸める**（ずれは 0.5 秒以内）。出来事の処理は窓がちょうど
+///   1 秒おきに並んでいることを前提にしている（events.dart の _segments）。
+/// * 区切りの最後の 10 秒の窓はまだ使わない（フィルターの端の影響があるため）。次の区切りで
+///   前の 15 秒をつけて計算し直してから使う。止めるとき（[flush]）は最後まで使う。
+library;
+
+import 'dart:async';
+import 'dart:isolate';
+
+import 'package:collar_data/collar_data.dart';
+import 'package:collar_pipeline/collar_pipeline.dart';
+import 'package:flutter/foundation.dart';
+
+import 'auto_vitals.dart';
+import 'cnn_models.dart';
+import 'imu_input.dart';
+import 'pipeline_store.dart';
+
+/// 1 つの窓の結果（保存する形）。
+class WindowResult {
+  const WindowResult({
+    required this.tDevUs,
+    required this.tMs,
+    required this.activity,
+    required this.label,
+    required this.prob,
+  });
+
+  final int tDevUs; // 首輪の時計（1 秒の格子に丸めたあと）
+  final int tMs; // UTC ミリ秒。分からなければ -1
+  final double activity; // m/s²
+  final String label; // CNN のラベル
+  final double prob; // CNN の確率
+}
+
+/// 別の isolate に渡す入力。中身はただのデータだけ（isolate の間で送れる）。
+class ChunkInput {
+  const ChunkInput({required this.samples, required this.classifier, this.fs, this.cfg = const PipelineConfig()});
+  final List<ImuSample> samples;
+  final WindowClassifier classifier;
+  final double? fs;
+  final PipelineConfig cfg;
+}
+
+class ChunkOutput {
+  const ChunkOutput({required this.fsGrid, required this.windows, required this.warnings});
+  final double fsGrid;
+  final List<WindowResult> windows; // まだ丸めていない
+  final List<String> warnings;
+}
+
+/// 1 つの区切りの計算（前処理 → CNN）。isolate の中で動く。
+ChunkOutput processChunk(ChunkInput input) {
+  final PreprocessResult pre = preprocessImu(input.samples, cfg: input.cfg, fs: input.fs);
+  final List<CnnWindow> cnn = input.classifier.classify(pre);
+  return ChunkOutput(
+    fsGrid: pre.fsGrid,
+    windows: <WindowResult>[
+      for (int i = 0; i < pre.nWindows; i++)
+        WindowResult(
+          tDevUs: pre.tStartDevUs[i],
+          tMs: pre.tStartMs[i],
+          activity: pre.activity[i],
+          label: cnn[i].label,
+          prob: cnn[i].prob,
+        ),
+    ],
+    warnings: pre.warnings,
+  );
+}
+
+typedef ChunkCompute = Future<ChunkOutput> Function(ChunkInput input);
+
+Future<ChunkOutput> _computeInIsolate(ChunkInput input) => Isolate.run(() => processChunk(input));
+
+/// アプリに入っている標準の CNN（v2・下限 0.9）を読む。版を選ぶときは PipelineRunner.setCnnVersion。
+Future<WindowClassifier> loadBundledClassifier() => loadClassifierAsset(defaultCnnVersion);
+
+const int _unsetUs = -1 << 62;
+
+/// 受信の様子（テスト画面 C 用）。センサーごと、首輪の時計で数える。
+class SensorStats {
+  int count = 0;
+
+  /// 抜け（間が maxGapMs＝50 ms より長い）の数と、抜けた時間の合計（秒）。
+  int gaps = 0;
+  double gapSeconds = 0;
+  double? _emaDtUs;
+
+  /// 首輪の時計での周波数（抜けを除いた間の平均から）。
+  double? get rateHz {
+    final double? d = _emaDtUs;
+    return d == null || d <= 0 ? null : 1e6 / d;
+  }
+
+  void _add(int dtUs, int maxGapUs) {
+    count++;
+    if (dtUs > maxGapUs) {
+      gaps++;
+      gapSeconds += dtUs / 1e6;
+      return;
+    }
+    final double? e = _emaDtUs;
+    _emaDtUs = e == null ? dtUs.toDouble() : e * 0.98 + dtUs * 0.02;
+  }
+}
+
+/// 1 回の接続（首輪の時計がつながっている間）の記録。
+class PipelineSession {
+  PipelineSession(this.id, this.startedMs);
+
+  final String id;
+  final int startedMs;
+
+  final List<ImuSample> _buf = <ImuSample>[];
+  final Map<String, int> _lastUs = <String, int>{};
+  int? _clockOffsetUs; // スマホの時計 − 首輪の時計（PetImuSample 用）
+  int _latestUs = _unsetUs;
+  int _processedToUs = _unsetUs;
+  ImuSample? lastSample; // 一番新しいサンプル（D のボタンの時刻に使う）
+  final StringBuffer _raw = StringBuffer(); // 生の IMU（E：.imu.csv にためて書く）
+  int _rawRows = 0;
+  double? fs;
+  int? anchorUs;
+  int lastK = -1;
+  bool _busy = false;
+
+  final List<WindowResult> windows = <WindowResult>[];
+  final List<VitalReading> vitals = <VitalReading>[];
+  final List<TruthMark> truth = <TruthMark>[]; // 正解のラベル（Unity・偽のデータ・D のボタン）
+  List<WindowState> states = const <WindowState>[];
+  List<BehaviorEvent> events = const <BehaviorEvent>[];
+}
+
+/// 処理の流れの持ち主。UI（テスト画面・毎日のページ）はこれを見る。
+class PipelineRunner extends ChangeNotifier {
+  PipelineRunner({
+    Future<WindowClassifier> Function()? loadClassifier,
+    this.store,
+    ChunkCompute? compute,
+    this.cfg = const PipelineConfig(),
+    this.ecfg = appEventConfig,
+    this.chunkNewS = 30,
+    this.contextS = 15,
+    this.tailS = 10,
+    this.recentKeep = 300,
+    this.dataVersionEvery = const Duration(minutes: 5),
+    this.saveRaw = true,
+    this.rawFlushRows = 1024,
+    this.autoVitals,
+    int Function()? nowMs,
+  })  : _customLoader = loadClassifier,
+        _compute = compute ?? _computeInIsolate,
+        _nowMs = nowMs ?? (() => DateTime.now().millisecondsSinceEpoch) {
+    autoVitals?.finishedListeners.add(_onAttempt);
+  }
+
+  /// B：記録の中のデータから心拍・呼吸を測る（自動と記録中の手動）。null なら測らない。
+  final AutoVitals? autoVitals;
+
+  /// テストなどで渡した読み方。null ならアプリに入っている [cnnVersion] の CNN。
+  final Future<WindowClassifier> Function()? _customLoader;
+
+  /// 使う CNN の版（T35：標準 v2、开发で v1 に戻せる）。
+  CnnVersion cnnVersion = defaultCnnVersion;
+
+  /// 版を変える。記録中は変えない（1 つの記録の中で混ざらないように）→ false。
+  bool setCnnVersion(CnnVersion v) {
+    if (isRunning) return false;
+    if (v != cnnVersion) {
+      cnnVersion = v;
+      _clf = null;
+      notifyListeners();
+    }
+    return true;
+  }
+
+  final ChunkCompute _compute;
+  final int Function() _nowMs;
+  final PipelineStore? store;
+  final PipelineConfig cfg;
+  final EventConfig ecfg;
+
+  /// 新しいデータがこれだけたまったら計算する（秒）。
+  final double chunkNewS;
+
+  /// 計算するときに前につける秒数（フィルターの端の影響を避ける）。
+  final double contextS;
+
+  /// 区切りの最後のこれだけの秒の窓は次の区切りまで使わない。
+  final double tailS;
+
+  /// テスト画面に出す最近の窓の数。
+  final int recentKeep;
+
+  /// 毎日のページに「読み直して」と知らせる間隔（止めたときはすぐ）。
+  final Duration dataVersionEvery;
+
+  /// E：受けた IMU をそのまま `<id>.imu.csv` にも残す（PC で Python と比べるため）。
+  final bool saveRaw;
+  final int rawFlushRows;
+
+  /// E：新しいセッションの頭（header）に入れる情報（犬の情報・入力の種類）。[ContinuousMonitor] が入れる。
+  Map<String, Object?> sessionInfo = <String, Object?>{};
+
+  Future<WindowClassifier>? _clf;
+  Future<void> _chain = Future<void>.value();
+
+  PipelineSession? _session;
+  PipelineSession? get session => _session;
+
+  /// 最後に止めたセッション（止めたあともテスト画面に出すため）。
+  PipelineSession? lastSession;
+
+  /// 毎日のページが読み直す合図。保存した窓がまとまるたびに増える。
+  final ValueNotifier<int> dataVersion = ValueNotifier<int>(0);
+  DateTime _lastDataBump = DateTime.fromMillisecondsSinceEpoch(0);
+
+  // テスト画面（C）用の数字
+  int samplesIn = 0;
+
+  /// 最後にサンプルを受けた時刻（スマホの時計、ms）。安全タブの「最后收到数据」に使う（T35）。
+  int? lastReceivedMs;
+  int chunksDone = 0;
+  int windowsTotal = 0;
+  Duration lastComputeTime = Duration.zero;
+  String? lastError;
+  final Set<String> warnings = <String>{};
+  final List<WindowResult> recent = <WindowResult>[];
+  WindowState? get lastState {
+    final List<WindowState> s = (_session ?? lastSession)?.states ?? const <WindowState>[];
+    return s.isEmpty ? null : s.last;
+  }
+
+  bool get isRunning => _session != null;
+
+  /// センサーごとの受信の様子（今のセッション）。
+  final Map<String, SensorStats> sensorStats = <String, SensorStats>{};
+
+  /// まだ計算していない（ためている）サンプルの数。
+  int get bufferedSamples => _session?._buf.length ?? 0;
+
+  /// 首輪（BLE）のサンプルを入れる。onboardImu → front、BMI088 → side。
+  /// UTC は最初のサンプルを受けたときのスマホの時計から決める。
+  void addPet(PetImuSample p) {
+    final String sensor = p.sensor == PetSensor.onboardImu ? 'front' : 'side';
+    PipelineSession s = _session ?? startSession();
+    final int? last = s._lastUs[sensor];
+    if (last != null && p.monotonicUs < last - 1000000) {
+      warnings.add('首輪的时钟倒退了（重启？），开始新的记录');
+      unawaited(flush());
+      s = startSession();
+    }
+    s._clockOffsetUs ??= _nowMs() * 1000 - p.monotonicUs;
+    add(ImuSample(
+      sensor: sensor,
+      tDevUs: p.monotonicUs,
+      tMs: (p.monotonicUs + s._clockOffsetUs!) ~/ 1000,
+      ax: p.ax,
+      ay: p.ay,
+      az: p.az,
+      gx: p.gx,
+      gy: p.gy,
+      gz: p.gz,
+    ));
+  }
+
+  PipelineSession startSession() {
+    autoVitals?.reset(); // 首輪の時計が変わる
+    final int now = _nowMs();
+    final PipelineSession s = PipelineSession('s$now', now);
+    _session = s;
+    sensorStats.clear();
+    unawaited(store?.startSession(s.id, <String, Object?>{'started_ms': now, ...sessionInfo}));
+    notifyListeners();
+    return s;
+  }
+
+  /// 前処理の共通形式のサンプルを入れる（Unity・偽のデータもここ）。
+  void add(ImuSample x) {
+    PipelineSession s = _session ?? startSession();
+    int? last = s._lastUs[x.sensor];
+    if (last != null && x.tDevUs < last - 1000000) {
+      // 首輪の時計が戻った＝再起動。今までの分を締めて新しいセッションにする。
+      warnings.add('首輪的时钟倒退了（重启？），开始新的记录');
+      unawaited(flush());
+      s = startSession();
+      last = null;
+    }
+    if (last != null && x.tDevUs <= last) return; // 同じ時刻・順番の入れ替わりは捨てる
+    final SensorStats st = sensorStats.putIfAbsent(x.sensor, SensorStats.new);
+    if (last == null) {
+      st.count++;
+    } else {
+      st._add(x.tDevUs - last, cfg.maxGapMs * 1000);
+    }
+    s._lastUs[x.sensor] = x.tDevUs;
+    if (s._buf.isEmpty && s.windows.isEmpty && s._processedToUs == _unsetUs) s._processedToUs = x.tDevUs;
+    s._buf.add(x);
+    s.lastSample = x;
+    if (saveRaw && store != null) _rawLine(s, x);
+    autoVitals?.onSample(x);
+    samplesIn++;
+    lastReceivedMs = _nowMs();
+    if (x.tDevUs > s._latestUs) s._latestUs = x.tDevUs;
+    if (!s._busy && s._latestUs - s._processedToUs >= chunkNewS * 1e6 && _spanUs(s) >= _minSpanUs) {
+      s._busy = true;
+      _enqueue(() => _process(s, flush: false));
+    }
+  }
+
+  void _rawLine(PipelineSession s, ImuSample x) {
+    s._raw
+      ..write(x.tDevUs)
+      ..write(',')
+      ..write(x.tMs ?? '')
+      ..write(',')
+      ..write(x.sensor);
+    for (final double v in <double>[x.ax, x.ay, x.az, x.gx, x.gy, x.gz]) {
+      s._raw
+        ..write(',')
+        ..write(v.isNaN ? '' : v.toStringAsFixed(5));
+    }
+    s._raw.write('\n');
+    s._rawRows++;
+    if (s._rawRows >= rawFlushRows) _flushRaw(s);
+  }
+
+  void _flushRaw(PipelineSession s) {
+    if (s._rawRows == 0) return;
+    final String text = s._raw.toString();
+    s._raw.clear();
+    s._rawRows = 0;
+    unawaited(store?.appendRaw(s.id, text));
+  }
+
+  /// E：犬の情報などを途中で変えたとき、今のセッションに書き足す（読むときは後のものが勝つ）。
+  void updateInfo() {
+    final PipelineSession? s = _session;
+    if (s != null) unawaited(store?.appendInfo(s.id, sessionInfo));
+  }
+
+  /// 心拍・呼吸の結果を入れる（B の自動測定から）。tDevUs は首輪の時計。
+  void addVital(VitalReading v, {Map<String, Object?> extra = const <String, Object?>{}}) {
+    final PipelineSession s = _session ?? startSession();
+    s.vitals.add(v);
+    unawaited(store?.appendVital(s.id, v, extra: extra));
+  }
+
+  /// 正解のラベル（その時刻からこの動き）。Unity・偽のデータの答え、D のボタンから。
+  void addTruth(TruthMark m) {
+    final PipelineSession s = _session ?? startSession();
+    s.truth.add(m);
+    unawaited(store?.appendTruth(s.id, m));
+    notifyListeners();
+  }
+
+  /// 今の時刻（首輪の時計と UTC）。最後に受けたサンプルからスマホの時計で進める
+  /// （受信の遅れの分。偽のデータを速く流しているときは進めない）。サンプルがまだなければ null。
+  ({int tDevUs, int tMs})? nowStamp() {
+    final ImuSample? x = _session?.lastSample;
+    final int? xm = x?.tMs;
+    if (x == null || xm == null) return null;
+    final int raw = _nowMs() - xm;
+    final int d = raw < 0 ? 0 : (raw > 2000 ? 2000 : raw);
+    return (tDevUs: x.tDevUs + d * 1000, tMs: xm + d);
+  }
+
+  /// D：見ている人がボタンを押した＝「今からこの動き」。記録していないときは false。
+  bool markNow(String label) {
+    final ({int tDevUs, int tMs})? t = nowStamp();
+    if (t == null) return false;
+    addTruth(TruthMark(tDevUs: t.tDevUs, tMs: t.tMs, label: label, source: 'button'));
+    return true;
+  }
+
+  /// D：最後に押したボタンを取り消す（押し間違い）。取り消したものを返す。
+  TruthMark? undoLastButton() {
+    final PipelineSession? s = _session;
+    if (s == null) return null;
+    final int i = s.truth.lastIndexWhere((TruthMark m) => m.source == 'button');
+    if (i < 0) return null;
+    final TruthMark m = s.truth.removeAt(i);
+    unawaited(store?.appendTruthUndo(s.id, m));
+    notifyListeners();
+    return m;
+  }
+
+  /// D：手で数えた心拍・呼吸（回/分）。正解として残すだけで、毎日の集計には入れない（kind が hr_truth・rr_truth）。
+  bool addManualVitals({double? hr, double? rr}) {
+    final ({int tDevUs, int tMs})? t = nowStamp();
+    if (t == null || (hr == null && rr == null)) return false;
+    if (hr != null) addVital(VitalReading(tMs: t.tMs, tDevUs: t.tDevUs, kind: 'hr_truth', value: hr, valid: true));
+    if (rr != null) addVital(VitalReading(tMs: t.tMs, tDevUs: t.tDevUs, kind: 'rr_truth', value: rr, valid: true));
+    notifyListeners();
+    return true;
+  }
+
+  /// B：測定が終わった → 記録に心拍・呼吸の行（中止・測れなかったときも valid: false で残す、B5）。
+  /// 時刻は 60 秒の真ん中。
+  void _onAttempt(VitalAttempt a) {
+    final PipelineSession? s = _session;
+    if (s == null) return;
+    final int half = (autoVitals!.measureS * 5e5).round();
+    final int tUs = a.tStartDevUs + half;
+    final int tMs = a.tStartMs >= 0 ? a.tStartMs + half ~/ 1000 : -1;
+    final Map<String, Object?> extra = <String, Object?>{
+      'trigger': a.trigger,
+      'sensor': a.sensor,
+      'status': a.status.name,
+      if (a.reason != null) 'reason': a.reason,
+      if (a.result != null) 'quality': a.result!.quality.name,
+      'samples': a.samples,
+      if (a.fs != null) 'fs': double.parse(a.fs!.toStringAsFixed(2)),
+    };
+    final bool ok = a.usable;
+    addVital(VitalReading(tMs: tMs, tDevUs: tUs, kind: 'hr', value: a.heartRateBpm, valid: ok), extra: extra);
+    final double? rr = a.respirationPerMin;
+    if (a.result != null) {
+      addVital(VitalReading(tMs: tMs, tDevUs: tUs, kind: 'rr', value: rr, valid: ok && rr != null), extra: extra);
+    }
+    notifyListeners();
+  }
+
+  /// 残りを全部計算して、このセッションを閉じる。
+  Future<void> flush() {
+    autoVitals?.reset(); // 測っている途中なら中止（session_end）として今のセッションに残す
+    final PipelineSession? s = _session;
+    _session = null;
+    if (s == null) return _chain;
+    lastSession = s;
+    _flushRaw(s);
+    _enqueue(() => _process(s, flush: true));
+    final Future<void> done = _chain.then((_) {
+      dataVersion.value++;
+      _lastDataBump = DateTime.now();
+      notifyListeners();
+    });
+    _chain = done;
+    return done;
+  }
+
+  /// 計算が全部終わるまで待つ（テスト用）。
+  Future<void> idle() => _chain;
+
+  int get _minSpanUs => ((cfg.windowS + 2 * cfg.edgeDropS + 1) * 1e6).round();
+
+  int _spanUs(PipelineSession s) => s._buf.isEmpty ? 0 : s._latestUs - s._buf.first.tDevUs;
+
+  void _enqueue(Future<void> Function() job) {
+    _chain = _chain.then((_) => job()).catchError((Object e, StackTrace st) {
+      lastError = e.toString();
+      debugPrint('PipelineRunner：$e\n$st');
+    });
+  }
+
+  Future<void> _process(PipelineSession s, {required bool flush}) async {
+    try {
+      final List<ImuSample> samples = List<ImuSample>.of(s._buf);
+      final int latestUs = s._latestUs;
+      if (samples.isEmpty || _spanUs(s) < _minSpanUs) return;
+      _clf ??= (_customLoader ?? () => loadClassifierAsset(cnnVersion))();
+      final WindowClassifier clf = await _clf!;
+      final Stopwatch sw = Stopwatch()..start();
+      ChunkOutput out;
+      try {
+        out = await _compute(ChunkInput(samples: samples, classifier: clf, fs: s.fs, cfg: cfg));
+      } on ArgumentError catch (e) {
+        // 前と後ろのセンサーが重ならない・データが短いなど。次の区切りでもう一度。
+        lastError = e.message.toString();
+        s._processedToUs = latestUs;
+        return;
+      }
+      lastComputeTime = sw.elapsed;
+      chunksDone++;
+      warnings.addAll(out.warnings.where((String w) => !w.startsWith('太短')));
+      s.fs ??= out.fsGrid;
+
+      final int windowUs = (cfg.windowS * 1e6).round();
+      final int tailUs = (tailS * 1e6).round();
+      final List<WindowResult> added = <WindowResult>[];
+      for (final WindowResult w in out.windows) {
+        s.anchorUs ??= w.tDevUs;
+        final int a = s.anchorUs!;
+        final int k = ((w.tDevUs - a) / 1e6).round();
+        if (k <= s.lastK) continue;
+        if (!flush && w.tDevUs + windowUs > latestUs - tailUs) break;
+        final int t = a + k * 1000000;
+        final int deltaMs = ((t - w.tDevUs) / 1000).round();
+        final WindowResult snapped = WindowResult(
+          tDevUs: t,
+          tMs: w.tMs >= 0 ? w.tMs + deltaMs : -1,
+          activity: w.activity,
+          label: w.label,
+          prob: w.prob,
+        );
+        added.add(snapped);
+        s.lastK = k;
+      }
+      s._processedToUs = latestUs;
+
+      // 次の区切りに要るところだけ残す
+      final int contextUs = (contextS * 1e6).round();
+      int keepFrom = latestUs - tailUs - windowUs - contextUs - 1000000;
+      if (s.anchorUs != null) {
+        final int fromAnchor = s.anchorUs! + (s.lastK + 1) * 1000000 - contextUs;
+        if (fromAnchor > keepFrom) keepFrom = fromAnchor;
+      }
+      s._buf.removeWhere((ImuSample x) => x.tDevUs < keepFrom);
+
+      if (added.isNotEmpty) {
+        s.windows.addAll(added);
+        windowsTotal += added.length;
+        recent.addAll(added);
+        if (recent.length > recentKeep) recent.removeRange(0, recent.length - recentKeep);
+        _recomputeEvents(s);
+        await store?.appendWindows(s.id, added);
+      }
+    } finally {
+      s._busy = false;
+    }
+    final DateTime now = DateTime.now();
+    if (!flush && now.difference(_lastDataBump) >= dataVersionEvery) {
+      _lastDataBump = now;
+      dataVersion.value++;
+    }
+    notifyListeners();
+    // 計算している間にたまった分
+    if (!flush && identical(_session, s) && !s._busy && s._latestUs - s._processedToUs >= chunkNewS * 1e6) {
+      s._busy = true;
+      _enqueue(() => _process(s, flush: false));
+    }
+  }
+
+  void _recomputeEvents(PipelineSession s) {
+    final EventsSnapshot r = computeEvents(s.windows, s.vitals, cfg: cfg, ecfg: ecfg);
+    s.states = r.states;
+    s.events = r.events;
+    if (identical(s, _session)) autoVitals?.onStates(s.states);
+  }
+
+  @override
+  void dispose() {
+    dataVersion.dispose();
+    super.dispose();
+  }
+}
+
+class EventsSnapshot {
+  const EventsSnapshot(this.states, this.events);
+  final List<WindowState> states;
+  final List<BehaviorEvent> events;
+}
+
+/// 保存した窓から状態と出来事を出す（毎日のページも同じものを使う）。
+EventsSnapshot computeEvents(List<WindowResult> windows, List<VitalReading> vitals,
+    {PipelineConfig cfg = const PipelineConfig(), EventConfig ecfg = const EventConfig()}) {
+  if (windows.isEmpty) return const EventsSnapshot(<WindowState>[], <BehaviorEvent>[]);
+  final List<int> tUs = <int>[for (final WindowResult w in windows) w.tDevUs];
+  final List<int> tMs = <int>[for (final WindowResult w in windows) w.tMs];
+  final List<WindowState> st =
+      judgeState(<double>[for (final WindowResult w in windows) w.activity], tUs, tStartMs: tMs, cfg: cfg);
+  final List<CnnWindow> cnn = <CnnWindow>[
+    for (final WindowResult w in windows) CnnWindow(tStartMs: w.tMs, tStartDevUs: w.tDevUs, label: w.label, prob: w.prob),
+  ];
+  final EventsResult r = buildEvents(st, cnn, vitals: vitals, cfg: cfg, ecfg: ecfg);
+  return EventsSnapshot(st, r.events);
+}

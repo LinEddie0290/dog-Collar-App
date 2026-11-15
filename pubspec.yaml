@@ -45,6 +45,9 @@ dependencies:
   # T24：首輪の IMU 用 CNN の推理（純 Dart）。重みは collar-pipeline の scripts/export_cnn.py。
   collar_imu_cnn:
     path: packages/collar_imu_cnn
+  # T34-A：collar-pipeline（Python）の前処理・状態判断などを Dart に移したもの。
+  collar_pipeline:
+    path: packages/collar_pipeline
   amap_map: ^1.0.15
   # amap_map の土台。LatLng / AMapApiKey などを直接 import しているので、
   # 推移的依存に頼らず明示的に書いておく(depend_on_referenced_packages 対策)。
