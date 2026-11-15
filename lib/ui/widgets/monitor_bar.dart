@@ -127,6 +127,15 @@ class MonitorBar extends StatelessWidget {
                       onSelected: (bool on) => f.setLinked(!on),
                       visualDensity: VisualDensity.compact,
                     ),
+                  // T11：模拟の「发烧」（皮膚の温度 +1.5℃）
+                  if (monitor.input case final FakeImuInput f)
+                    FilterChip(
+                      key: const ValueKey<String>('fake-fever'),
+                      label: const Text('模拟发烧'),
+                      selected: f.fever,
+                      onSelected: f.setFever,
+                      visualDensity: VisualDensity.compact,
+                    ),
                   // T34-G：模拟の緊急（模拟のときだけ）。摔倒は IMU の波形を入れる → 2 分後に「可能倒下了」
                   if (monitor.input case final FakeImuInput f)
                     ActionChip(

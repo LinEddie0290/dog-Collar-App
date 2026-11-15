@@ -18,6 +18,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../data/ble_collar_data_source.dart';
 import '../data/safe_zone.dart';
+import '../data/temp_judge.dart';
 import '../pipeline/auto_vitals.dart';
 import '../pipeline/cnn_models.dart';
 import '../pipeline/imu_input.dart';
@@ -57,6 +58,7 @@ class ContinuousMonitor extends ChangeNotifier {
   /// T36：位置と安全区。記録の入力から GPS を渡す。null なら位置は扱わない。
   final LocationController? location;
   StreamSubscription<LocationFix>? _gpsSub;
+  StreamSubscription<TempReading>? _tempSub; // T11
   final ImuInputFactory _factory;
 
   static const String _kKind = 'monitor.input';
@@ -228,6 +230,8 @@ class ContinuousMonitor extends ChangeNotifier {
     _sub = imu.listen(runner.addPet);
     final Stream<LocationFix>? fx = link.fixes;
     if (fx != null) _attachGps(fx);
+    final Stream<TempReading>? tp = link.temps;
+    if (tp != null) _tempSub = tp.listen(runner.addTemp);
     link.archive?.event('monitor_start', <String, Object?>{
       'started_at_ms': DateTime.now().millisecondsSinceEpoch,
       'imu_rate_hz': link.activeImuRateHz,
@@ -241,6 +245,7 @@ class ContinuousMonitor extends ChangeNotifier {
     _inSub = input.samples.listen(runner.add);
     _markSub = input.marks.listen(runner.addTruth);
     _attachGps(input.fixes);
+    _tempSub = input.temps.listen(runner.addTemp);
     input.addListener(_onInput);
     try {
       await input.start();
@@ -276,6 +281,8 @@ class ContinuousMonitor extends ChangeNotifier {
   Future<void> _detachGps() async {
     await _gpsSub?.cancel();
     _gpsSub = null;
+    await _tempSub?.cancel();
+    _tempSub = null;
     location?.detach();
   }
 
@@ -333,6 +340,7 @@ class ContinuousMonitor extends ChangeNotifier {
     _inSub?.cancel();
     _markSub?.cancel();
     _gpsSub?.cancel();
+    _tempSub?.cancel();
     _input?.dispose();
     super.dispose();
   }

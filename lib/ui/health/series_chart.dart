@@ -16,6 +16,7 @@ class SeriesChart extends StatelessWidget {
     required this.color,
     this.usual,
     this.bandPct = 15,
+    this.bandAbs,
     this.mini = false,
   });
 
@@ -26,6 +27,9 @@ class SeriesChart extends StatelessWidget {
   /// 平時（帯の真ん中）。null なら帯を描かない。
   final double? usual;
   final int bandPct;
+
+  /// T11：帯を ±値（℃など）で。null なら ±[bandPct]%。
+  final double? bandAbs;
 
   /// 行に入れる小さい線（帯・強調なし）。
   final bool mini;
@@ -39,18 +43,20 @@ class SeriesChart extends StatelessWidget {
     }
     return CustomPaint(
       size: Size.infinite,
-      painter: _SeriesPainter(values: values, color: color, usual: mini ? null : usual, bandPct: bandPct, mini: mini),
+      painter: _SeriesPainter(values: values, color: color, usual: mini ? null : usual, bandPct: bandPct, bandAbs: bandAbs, mini: mini),
     );
   }
 }
 
 class _SeriesPainter extends CustomPainter {
-  _SeriesPainter({required this.values, required this.color, this.usual, required this.bandPct, required this.mini});
+  _SeriesPainter(
+      {required this.values, required this.color, this.usual, required this.bandPct, this.bandAbs, required this.mini});
 
   final List<double?> values;
   final Color color;
   final double? usual;
   final int bandPct;
+  final double? bandAbs;
   final bool mini;
 
   @override
@@ -61,8 +67,8 @@ class _SeriesPainter extends CustomPainter {
     double lo = vs.reduce(math.min);
     double hi = vs.reduce(math.max);
     if (u != null) {
-      lo = math.min(lo, u * (1 - b));
-      hi = math.max(hi, u * (1 + b));
+      lo = math.min(lo, bandAbs != null ? u - bandAbs! : u * (1 - b));
+      hi = math.max(hi, bandAbs != null ? u + bandAbs! : u * (1 + b));
     }
     if (hi - lo < 1e-9) {
       lo -= 1;
@@ -81,7 +87,8 @@ class _SeriesPainter extends CustomPainter {
     double y(double v) => top + h * (1 - (v - lo) / (hi - lo));
 
     if (u != null) {
-      final Rect band = Rect.fromLTRB(left, y(u * (1 + b)), left + w, y(u * (1 - b)));
+      final double bHi = bandAbs != null ? u + bandAbs! : u * (1 + b), bLo = bandAbs != null ? u - bandAbs! : u * (1 - b);
+      final Rect band = Rect.fromLTRB(left, y(bHi), left + w, y(bLo));
       canvas.drawRRect(RRect.fromRectAndRadius(band, const Radius.circular(6)),
           Paint()..color = color.withValues(alpha: 0.12));
       final Paint dash = Paint()
@@ -123,5 +130,6 @@ class _SeriesPainter extends CustomPainter {
       old.color != color ||
       old.usual != usual ||
       old.bandPct != bandPct ||
+      old.bandAbs != bandAbs ||
       old.mini != mini;
 }

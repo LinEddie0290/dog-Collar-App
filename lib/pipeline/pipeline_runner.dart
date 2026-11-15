@@ -20,6 +20,7 @@ import 'package:collar_pipeline/collar_pipeline.dart';
 import 'package:flutter/foundation.dart';
 
 import '../data/emergency_watch.dart';
+import '../data/temp_judge.dart';
 import '../data/safe_zone.dart';
 import 'auto_vitals.dart';
 import 'cnn_models.dart';
@@ -371,6 +372,13 @@ class PipelineRunner extends ChangeNotifier {
     final PipelineSession? s = _session;
     if (s == null) return;
     unawaited(store?.appendEmergency(s.id, h));
+  }
+
+  /// T11：首輪の温度を記録ファイルへ（記録中だけ）。
+  void addTemp(TempReading r) {
+    final PipelineSession? s = _session;
+    if (s == null) return;
+    unawaited(store?.appendTemp(s.id, r));
   }
 
   void addGps(LocationFix f) {

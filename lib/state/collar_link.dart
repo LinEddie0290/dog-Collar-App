@@ -21,6 +21,7 @@ import 'package:path_provider/path_provider.dart';
 import '../data/ble_collar_data_source.dart';
 import '../data/known_device.dart';
 import '../data/safe_zone.dart';
+import '../data/temp_judge.dart';
 
 enum LinkState {
   disconnected,
@@ -121,6 +122,12 @@ class CollarLink extends ChangeNotifier {
   Stream<LocationFix>? get fixes {
     final BleCollarDataSource? s = _source;
     return s == null ? null : fixesFromFrames(s.frames);
+  }
+
+  /// T11：首輪の温度（物体・環境）。値が変わったときか、1 秒たったときだけ（[tempsFromFrames]）。
+  Stream<TempReading>? get temps {
+    final BleCollarDataSource? s = _source;
+    return s == null ? null : tempsFromFrames(s.frames);
   }
 
   int? get negotiatedMtu => _source?.negotiatedMtu;
@@ -396,4 +403,20 @@ Stream<LocationFix> fixesFromFrames(Stream<RawFrame> frames, {int minGapMs = 100
         accuracyM: s.estimatedAccuracyM?.round(),
         source: 'collar',
       ));
+}
+
+/// T11：250 ms ごとのまとめ（RawFrame）→ 温度。両方の値がある・値が変わったか 1 秒たったときだけ。
+Stream<TempReading> tempsFromFrames(Stream<RawFrame> frames, {int minGapMs = 1000}) {
+  double? lastObj, lastAmb;
+  int lastMs = 0;
+  return frames.map(SensorSample.fromRaw).where((SensorSample s) {
+    final double? o = s.bodyTempC, a = s.ambientTempC;
+    if (o == null || a == null) return false;
+    final bool changed = o != lastObj || a != lastAmb;
+    if (!changed && s.rxTs - lastMs < minGapMs) return false;
+    lastObj = o;
+    lastAmb = a;
+    lastMs = s.rxTs;
+    return true;
+  }).map((SensorSample s) => TempReading(tMs: s.rxTs, objC: s.bodyTempC!, ambC: s.ambientTempC!, source: 'collar'));
 }

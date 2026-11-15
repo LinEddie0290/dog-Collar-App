@@ -14,7 +14,9 @@ import 'package:collar_geo/collar_geo.dart';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../data/gps_track.dart';
 import '../data/safe_zone.dart';
+import '../data/temp_judge.dart' show localDateOf;
 import 'app_notifier.dart';
 
 class LocationController extends ChangeNotifier {
@@ -130,9 +132,40 @@ class LocationController extends ChangeNotifier {
     notifyListeners();
   }
 
+  // ---- T12：今日の屋外の距離・時間（安全タブ）。1 日まとめと同じ計算（GpsTracker）
+  final GpsTracker _tracker = GpsTracker();
+  String? _todayDate;
+  double todayOutdoorM = 0;
+  double todayOutdoorMin = 0;
+
+  /// 今日（UTC＋8）の屋外の距離・時間の一行。今日の位置がまだなければ null。
+  String? get todayOutdoorLine {
+    final LocationFix? f = lastFix;
+    if (f == null || _todayDate != localDateOf(_nowMs())) return null;
+    return '今天户外：${outdoorText(todayOutdoorM, todayOutdoorMin)}';
+  }
+
+  void _track(LocationFix f) {
+    final String d = localDateOf(f.tMs);
+    if (d != _todayDate) {
+      _todayDate = d;
+      todayOutdoorM = 0;
+      todayOutdoorMin = 0;
+      _tracker.reset();
+    }
+    final int? acc = f.accuracyM;
+    final TrackPoint? p = _tracker.add(
+        GpsPoint(tMs: f.tMs, lat: f.point.lat, lng: f.point.lng, hdop: acc == null ? null : acc / 5));
+    if (p != null) {
+      todayOutdoorM += p.stepM;
+      todayOutdoorMin += p.dtS / 60;
+    }
+  }
+
   void addFix(LocationFix f) {
     lastFix = f;
     _wasOffline = false;
+    _track(f);
     final ZoneJudge? j = _judge;
     if (j != null) _handle(j.update(f));
     notifyListeners();

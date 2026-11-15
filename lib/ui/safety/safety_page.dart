@@ -116,6 +116,9 @@ class SafetyPage extends StatelessWidget {
                       warn: lc?.state == ZoneState.lost,
                     ),
                     _StatusRow(icon: Icons.home_outlined, text: zoneLine(lc?.zone)),
+                    // T12：今日の屋外の距離・時間（GPS）
+                    if (lc?.todayOutdoorLine case final String line)
+                      _StatusRow(key: const ValueKey<String>('safety-outdoor'), icon: Icons.directions_walk, text: line),
                   ],
                 ),
               ),

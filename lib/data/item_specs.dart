@@ -14,6 +14,8 @@ class ItemSpec {
     required this.why,
     required this.source,
     this.link = false,
+    this.bandAbs,
+    this.minUsualDays,
   });
 
   final String id;
@@ -37,6 +39,12 @@ class ItemSpec {
 
   /// 値ではなく別の画面へのボタン（像心电图的波形 → 测定）。
   final bool link;
+
+  /// T11：平時の帯を ±値で（体温 ±1.0℃）。null なら ±15%。
+  final double? bandAbs;
+
+  /// T11：平時に要る日の数（体温は 3 日）。null なら 7 日。
+  final int? minUsualDays;
 }
 
 const List<ItemSpec> itemSpecs = <ItemSpec>[
@@ -126,12 +134,14 @@ const List<ItemSpec> itemSpecs = <ItemSpec>[
       source: 'IMU → 心跳的波形（「测定」的记录里看）'),
   ItemSpec('temp',
       unit: '℃',
-      min: 38.0,
-      max: 39.0,
+      min: 36.4,
+      max: 37.2,
       decimals: 1,
-      what: '项圈测到的体温',
-      why: '发烧或体温下降都要留意',
-      source: 'MLX90615（红外体温，T11）'),
+      bandAbs: 1.0,
+      minUsualDays: 3,
+      what: '项圈测到的皮肤温度，和这只狗的平时比（皮肤温度比身体里面低，不说「体温几度」）',
+      why: '比平时高 1℃ 以上可能是发烧，低 1℃ 以上也要留意',
+      source: 'MLX90615（红外，测皮肤）→ 稳定 1 分钟的值 → 一天的中位数（T11）'),
   ItemSpec('tremble',
       unit: '次',
       min: 0,

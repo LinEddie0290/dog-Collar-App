@@ -16,6 +16,7 @@ import 'package:collar_pipeline/collar_pipeline.dart';
 import 'package:flutter/foundation.dart';
 
 import '../data/safe_zone.dart';
+import '../data/temp_judge.dart';
 
 enum InputKind { collar, unity, fake }
 
@@ -37,6 +38,9 @@ abstract class ImuInput extends ChangeNotifier {
 
   /// T36：GPS の位置。ない入力（Unity）は空。
   Stream<LocationFix> get fixes => const Stream<LocationFix>.empty();
+
+  /// T11：首輪の温度（物体＝皮膚・環境）。ない入力は空。
+  Stream<TempReading> get temps => const Stream<TempReading>.empty();
 
   /// T36：首輪とスマホがつながっているか（BLE のかわり）。模拟では「模拟断开」で false にできる。
   bool get linked => true;
@@ -414,6 +418,25 @@ class FakeImuInput extends ImuInput {
   final StreamController<ImuSample> _out = StreamController<ImuSample>.broadcast();
   final StreamController<TruthMark> _marks = StreamController<TruthMark>.broadcast();
   final StreamController<LocationFix> _fixes = StreamController<LocationFix>.broadcast();
+  final StreamController<TempReading> _temps = StreamController<TempReading>.broadcast();
+
+  /// T11：「模拟发烧」（皮膚の温度 +1.5℃）。
+  bool fever = false;
+
+  void setFever(bool v) {
+    if (v == fever) return;
+    fever = v;
+    notifyListeners();
+  }
+
+  /// 模拟の時間 [tS] 秒の温度。ふだん 36.8℃（皮膚）、走っている間は首輪がずれて皮膚に向かない（物体≒環境）。
+  TempReading tempAt(int tS, int tMs) {
+    final double amb = 26.0 + 0.1 * math.sin(tS / 37);
+    final FakeImuGenerator? g = gen;
+    final bool loose = g != null && g.labelAt(tS.toDouble()) == 'run';
+    final double obj = loose ? amb + 1.0 : 36.8 + 0.02 * math.sin(tS * 0.7) + (fever ? 1.5 : 0);
+    return TempReading(tMs: tMs, objC: obj, ambC: amb, source: 'fake');
+  }
 
   /// 次に出す GPS の秒（模拟の時間で 1 秒に 1 回）。
   int _nextFixS = 0;
@@ -421,6 +444,9 @@ class FakeImuInput extends ImuInput {
 
   @override
   Stream<LocationFix> get fixes => _fixes.stream;
+
+  @override
+  Stream<TempReading> get temps => _temps.stream;
 
   @override
   bool get linked => _linked;
@@ -503,6 +529,8 @@ class FakeImuInput extends ImuInput {
           source: 'fake',
         ));
       }
+      // T11：温度も 1 秒に 1 回（GPS と同じく、切れている間は届かない）
+      if (_linked) _temps.add(tempAt(_nextFixS, g.t0Ms + (_nextFixS * 1000)));
       _nextFixS++;
     }
     if (xs.isNotEmpty) notifyListeners();
@@ -522,6 +550,7 @@ class FakeImuInput extends ImuInput {
     _out.close();
     _marks.close();
     _fixes.close();
+    _temps.close();
     super.dispose();
   }
 }

@@ -18,7 +18,9 @@ import 'package:collar_pipeline/collar_pipeline.dart';
 import 'package:path_provider/path_provider.dart';
 
 import '../data/emergency_watch.dart';
+import '../data/gps_track.dart';
 import '../data/safe_zone.dart';
+import '../data/temp_judge.dart';
 import 'imu_input.dart';
 import 'pipeline_runner.dart';
 
@@ -31,6 +33,12 @@ class StoredSession {
   final List<WindowResult> windows = <WindowResult>[];
   final List<VitalReading> vitals = <VitalReading>[];
   final List<TruthMark> truth = <TruthMark>[];
+
+  /// T11：首輪の温度（届いたもの全部）。
+  final List<TempReading> temps = <TempReading>[];
+
+  /// T12：位置（gps の行。HDOP は acc_m ÷ 5）。
+  final List<GpsPoint> gps = <GpsPoint>[];
 }
 
 class PipelineStore {
@@ -116,6 +124,15 @@ class PipelineStore {
         if (f.source.isNotEmpty) 'src': f.source,
       });
 
+  /// T11：首輪の温度（物体＝皮膚・環境）。
+  Future<void> appendTemp(String id, TempReading r) => _append(id, <String, Object?>{
+        'rec': 'temp',
+        't_ms': r.tMs,
+        'obj_c': r.objC,
+        'amb_c': r.ambC,
+        if (r.source.isNotEmpty) 'src': r.source,
+      });
+
   /// T34-G：緊急（冲击・倒下・心率异常）。
   Future<void> appendEmergency(String id, EmergencyHit h) => _append(id, <String, Object?>{
         'rec': 'emergency',
@@ -189,6 +206,19 @@ List<StoredSession> loadSessionsFrom(String dirPath) {
           final int i = s.truth.lastIndexWhere(
               (TruthMark x) => x.tDevUs == (m['t_us'] as num).toInt() && x.label == m['label'] && x.source == 'button');
           if (i >= 0) s.truth.removeAt(i);
+        case 'temp':
+          final num? o = m['obj_c'] as num?, a = m['amb_c'] as num?;
+          if (o != null && a != null) {
+            s.temps.add(TempReading(tMs: (m['t_ms'] as num).toInt(), objC: o.toDouble(), ambC: a.toDouble()));
+          }
+        case 'gps':
+          final num? acc = m['acc_m'] as num?;
+          s.gps.add(GpsPoint(
+            tMs: (m['t_ms'] as num).toInt(),
+            lat: (m['lat'] as num).toDouble(),
+            lng: (m['lng'] as num).toDouble(),
+            hdop: acc == null ? null : acc.toDouble() / 5,
+          ));
         case 'vital':
           s.vitals.add(VitalReading(
             tMs: (m['t_ms'] as num).toInt(),
