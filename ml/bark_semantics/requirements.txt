@@ -1,0 +1,14 @@
+# Python 3.10.12 used on this host. The task specified 3.11; only 3.10 was
+# available here (documented in docs/RESULTS.md). All pins below are the exact
+# versions actually installed and tested.
+tensorflow-cpu==2.17.0
+tensorflow_hub==0.16.1
+numpy==1.26.4
+scipy==1.15.3
+soundfile==0.14.0
+PyYAML==6.0.3
+# Semantic layer L1 (F0 + HNR via Praat). The single runtime addition — one
+# compiled wheel, no numba/llvmlite (librosa was dropped for this reason).
+praat-parselmouth==0.4.5
+# Dataset tooling (dev-set assembly only; not needed to run detect.py/rules.py):
+huggingface_hub==1.21.0
