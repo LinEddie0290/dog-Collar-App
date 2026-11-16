@@ -24,6 +24,7 @@ class GoogleMapsProviderStub implements MapProvider {
     GeoPoint? dogPosition,
     bool dogPositionIsStale = false,
     GeofenceConfig? fence,
+    ValueChanged<GeoPoint>? onLongPress,
   }) {
     throw UnimplementedError(
       'GoogleMapsProviderStub は未実装です。AmapMapProvider と同じ形で '

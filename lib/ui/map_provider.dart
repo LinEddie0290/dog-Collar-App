@@ -22,5 +22,8 @@ abstract class MapProvider {
     GeoPoint? dogPosition,
     bool dogPositionIsStale = false,
     GeofenceConfig? fence,
+
+    /// T36：地図を長押ししたところ（WGS84 に直して渡す）。家を決めるのに使う。
+    ValueChanged<GeoPoint>? onLongPress,
   });
 }

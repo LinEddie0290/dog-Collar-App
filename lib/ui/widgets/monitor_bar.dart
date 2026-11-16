@@ -118,6 +118,44 @@ class MonitorBar extends StatelessWidget {
                         onSelected: locked ? null : (_) => monitor.setInput(fakeSpeed: s),
                         visualDensity: VisualDensity.compact,
                       ),
+                  // T36：模拟の「BLE が切れた」（安全区の外で切れると「可能走失」）。記録中だけ
+                  if (monitor.input case final FakeImuInput f)
+                    FilterChip(
+                      key: const ValueKey<String>('fake-disconnect'),
+                      label: const Text('模拟断开'),
+                      selected: !f.linked,
+                      onSelected: (bool on) => f.setLinked(!on),
+                      visualDensity: VisualDensity.compact,
+                    ),
+                  // T11：模拟の「发烧」（皮膚の温度 +1.5℃）
+                  if (monitor.input case final FakeImuInput f)
+                    FilterChip(
+                      key: const ValueKey<String>('fake-fever'),
+                      label: const Text('模拟发烧'),
+                      selected: f.fever,
+                      onSelected: f.setFever,
+                      visualDensity: VisualDensity.compact,
+                    ),
+                  // T34-G：模拟の緊急（模拟のときだけ）。摔倒は IMU の波形を入れる → 2 分後に「可能倒下了」
+                  if (monitor.input case final FakeImuInput f)
+                    ActionChip(
+                      key: const ValueKey<String>('fake-fall'),
+                      label: const Text('模拟摔倒'),
+                      onPressed: f.injectFall,
+                      visualDensity: VisualDensity.compact,
+                    ),
+                  if (monitor.input is FakeImuInput && monitor.emergency != null)
+                    ActionChip(
+                      key: const ValueKey<String>('fake-heart'),
+                      label: const Text('模拟心率高'),
+                      onPressed: () {
+                        // 安全線の外が 2 回続いた、と同じ（1 分おき）
+                        final int now = DateTime.now().millisecondsSinceEpoch;
+                        monitor.emergency!.addHeart(tMs: now - 60000, bpm: 190, good: true, fake: true);
+                        monitor.emergency!.addHeart(tMs: now, bpm: 195, good: true, fake: true);
+                      },
+                      visualDensity: VisualDensity.compact,
+                    ),
                 ],
               ),
             ],

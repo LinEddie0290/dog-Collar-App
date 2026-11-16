@@ -12,6 +12,8 @@ import 'package:collar_pipeline/collar_pipeline.dart';
 import 'package:flutter/foundation.dart';
 
 import '../data/daily_summary.dart';
+import '../data/gps_track.dart';
+import '../data/temp_judge.dart';
 import 'cnn_models.dart';
 import 'pipeline_runner.dart';
 import 'pipeline_store.dart';
@@ -54,7 +56,11 @@ String buildSummaryData(String dirPath, String dogId, String generatedAt,
   final List<BehaviorEvent> events = <BehaviorEvent>[];
   final Map<String, int> wins = <String, int>{};
   final List<VitalReading> vitals = <VitalReading>[];
+  final List<TempReading> temps = <TempReading>[];
+  final List<GpsPoint> gps = <GpsPoint>[];
   for (final StoredSession s in sessions) {
+    temps.addAll(s.temps);
+    gps.addAll(s.gps);
     final EventsSnapshot snap = computeEvents(s.windows, s.vitals, cfg: cfg, ecfg: ecfg);
     events.addAll(snap.events);
     countWindowsByDate(<int>[for (final WindowResult w in s.windows) w.tMs], cfg: dcfg)
@@ -78,6 +84,12 @@ String buildSummaryData(String dirPath, String dogId, String generatedAt,
     if (!dailyRawMetrics.contains(r.metric) || r.value.isNaN) continue;
     raw[r.date]?[r.metric] = r.value;
   }
+  // T11：皮膚の温度の 1 日の値（安定した 1 分の中央値）。T12：屋外の距離・時間
+  dailyTemp(stableTempBlocks(temps)).forEach((String d, ({double value, int nBlocks}) v) => raw[d]?['temp_c'] = v.value);
+  dailyOutdoor(trackGps(gps)).forEach((String d, ({double outdoorM, double outdoorMin}) v) {
+    raw[d]?['outdoor_m'] = v.outdoorM;
+    raw[d]?['outdoor_min'] = v.outdoorMin;
+  });
   for (final BehaviorEvent e in events) {
     if (e.tStartMs < 0) continue;
     final String d = dateKey(DateTime.fromMillisecondsSinceEpoch(e.tStartMs, isUtc: true)

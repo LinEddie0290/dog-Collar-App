@@ -11,8 +11,12 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
 
+import 'package:collar_geo/collar_geo.dart';
 import 'package:collar_pipeline/collar_pipeline.dart';
 import 'package:flutter/foundation.dart';
+
+import '../data/safe_zone.dart';
+import '../data/temp_judge.dart';
 
 enum InputKind { collar, unity, fake }
 
@@ -31,6 +35,15 @@ class TruthMark {
 abstract class ImuInput extends ChangeNotifier {
   Stream<ImuSample> get samples;
   Stream<TruthMark> get marks => const Stream<TruthMark>.empty();
+
+  /// T36：GPS の位置。ない入力（Unity）は空。
+  Stream<LocationFix> get fixes => const Stream<LocationFix>.empty();
+
+  /// T11：首輪の温度（物体＝皮膚・環境）。ない入力は空。
+  Stream<TempReading> get temps => const Stream<TempReading>.empty();
+
+  /// T36：首輪とスマホがつながっているか（BLE のかわり）。模拟では「模拟断开」で false にできる。
+  bool get linked => true;
   Future<void> start();
   Future<void> stop();
 
@@ -293,10 +306,22 @@ class FakeImuGenerator {
   final math.Random _rng;
   int _i = 0;
 
+  /// T34-G：「模拟摔倒」を始めた時刻（秒）。null ならなし。
+  double? fallFromS;
+
+  /// 摔倒の長さ：0.3 秒のぶつかり → 横倒しで静止 → 最後の 3 秒でゆっくり起き上がる。
+  static const double fallLengthS = 150;
+
+  bool _inFall(double t) {
+    final double? f = fallFromS;
+    return f != null && t >= f && t < f + fallLengthS;
+  }
+
   double get cycleS => scenario.fold(0.0, (double a, FakePhase p) => a + p.seconds);
 
   /// 時刻 t（秒、最初から）の動き。
   String labelAt(double t) {
+    if (_inFall(t)) return 'fall';
     double x = t % cycleS;
     for (final FakePhase p in scenario) {
       if (x < p.seconds) return p.label;
@@ -326,6 +351,19 @@ class FakeImuGenerator {
     double ax = 0.02 * _n(), ay = 0.02 * _n(), az = _g + 0.02 * _n();
     double gx = 0.002 * _n(), gy = 0.002 * _n(), gz = 0.002 * _n();
     switch (labelAt(t)) {
+      case 'fall':
+        {
+          final double u = t - fallFromS!;
+          // 横倒し：重力が z から x へ（90°）。最後の 3 秒で戻る（1 秒に 30° なので「急な変化」にならない）
+          final double back = u > fallLengthS - 3 ? (u - (fallLengthS - 3)) / 3 : 0;
+          final double th = (1 - back) * math.pi / 2;
+          ax = _g * math.sin(th) + 0.02 * _n();
+          az = _g * math.cos(th) + 0.02 * _n();
+          if (u < 0.3) {
+            ax += 18; // ぶつかり（約 2.8 g）
+            gz += 6;
+          }
+        }
       case 'walk':
         ax += 3.0 * math.sin(w + 0.3);
         ay += 1.5 * math.sin(2 * w + 1.0);
@@ -359,17 +397,80 @@ class FakeImuGenerator {
 
 /// 偽のデータを時計に合わせて流す。[speed] 倍で速く流せる（10 倍なら 1 日分が 2.4 時間）。
 class FakeImuInput extends ImuInput {
-  FakeImuInput({this.speed = 1, int? seed, int Function()? nowMs, this.tick = const Duration(milliseconds: 100)})
-      : _nowMs = nowMs ?? (() => DateTime.now().millisecondsSinceEpoch),
-        _seed = seed ?? 1;
+  FakeImuInput({
+    this.speed = 1,
+    int? seed,
+    int Function()? nowMs,
+    this.tick = const Duration(milliseconds: 100),
+    GeoPoint? home,
+  })  : _nowMs = nowMs ?? (() => DateTime.now().millisecondsSinceEpoch),
+        _seed = seed ?? 1,
+        home = home ?? fakeDefaultHome;
 
   final double speed;
   final Duration tick;
   final int Function() _nowMs;
   final int _seed;
 
+  /// T36：GPS の道の出発点（家）。家が決まっていなければ [fakeDefaultHome]。
+  final GeoPoint home;
+
   final StreamController<ImuSample> _out = StreamController<ImuSample>.broadcast();
   final StreamController<TruthMark> _marks = StreamController<TruthMark>.broadcast();
+  final StreamController<LocationFix> _fixes = StreamController<LocationFix>.broadcast();
+  final StreamController<TempReading> _temps = StreamController<TempReading>.broadcast();
+
+  /// T11：「模拟发烧」（皮膚の温度 +1.5℃）。
+  bool fever = false;
+
+  void setFever(bool v) {
+    if (v == fever) return;
+    fever = v;
+    notifyListeners();
+  }
+
+  /// 模拟の時間 [tS] 秒の温度。ふだん 36.8℃（皮膚）、走っている間は首輪がずれて皮膚に向かない（物体≒環境）。
+  TempReading tempAt(int tS, int tMs) {
+    final double amb = 26.0 + 0.1 * math.sin(tS / 37);
+    final FakeImuGenerator? g = gen;
+    final bool loose = g != null && g.labelAt(tS.toDouble()) == 'run';
+    final double obj = loose ? amb + 1.0 : 36.8 + 0.02 * math.sin(tS * 0.7) + (fever ? 1.5 : 0);
+    return TempReading(tMs: tMs, objC: obj, ambC: amb, source: 'fake');
+  }
+
+  /// 次に出す GPS の秒（模拟の時間で 1 秒に 1 回）。
+  int _nextFixS = 0;
+  bool _linked = true;
+
+  @override
+  Stream<LocationFix> get fixes => _fixes.stream;
+
+  @override
+  Stream<TempReading> get temps => _temps.stream;
+
+  @override
+  bool get linked => _linked;
+
+  /// T36：「模拟断开」（首輪とスマホの BLE が切れたのと同じ）。もう一度でつながる。
+  void setLinked(bool v) {
+    if (v == _linked) return;
+    _linked = v;
+    notifyListeners();
+  }
+
+  /// T34-G：「模拟摔倒」。今の時刻から、ぶつかって横倒し → 2 分半ほぼ動かない。
+  void injectFall() {
+    final FakeImuGenerator? g = gen;
+    if (g == null) return;
+    g.fallFromS = elapsedS;
+    notifyListeners();
+  }
+
+  /// 模拟の時間 [tS] 秒の位置。
+  GeoPoint fixAt(double tS) {
+    final ({double east, double north}) o = fakeRouteOffset(tS);
+    return offsetPoint(home, o.east, o.north);
+  }
   FakeImuGenerator? gen;
   Timer? _timer;
   int _startMs = 0;
@@ -417,6 +518,21 @@ class FakeImuInput extends ImuInput {
       _out.add(s);
     }
     sent += xs.length;
+    // GPS：模拟の時間で 1 秒に 1 回（切れている間は届かない：首輪の GPS も BLE で来るため）
+    final double now = elapsedS;
+    while (_nextFixS <= now) {
+      if (_linked) {
+        _fixes.add(LocationFix(
+          point: fixAt(_nextFixS.toDouble()),
+          tMs: g.t0Ms + (_nextFixS * 1000),
+          accuracyM: 5,
+          source: 'fake',
+        ));
+      }
+      // T11：温度も 1 秒に 1 回（GPS と同じく、切れている間は届かない）
+      if (_linked) _temps.add(tempAt(_nextFixS, g.t0Ms + (_nextFixS * 1000)));
+      _nextFixS++;
+    }
     if (xs.isNotEmpty) notifyListeners();
   }
 
@@ -433,6 +549,11 @@ class FakeImuInput extends ImuInput {
     _timer?.cancel();
     _out.close();
     _marks.close();
+    _fixes.close();
+    _temps.close();
     super.dispose();
   }
 }
+
+/// T36：家が決まっていないときの模拟の出発点（上海。前の偽の首輪と同じ）。
+const GeoPoint fakeDefaultHome = GeoPoint(31.2304, 121.4737);

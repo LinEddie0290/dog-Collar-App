@@ -17,27 +17,48 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../data/ble_collar_data_source.dart';
+import '../data/safe_zone.dart';
+import '../data/temp_judge.dart';
 import '../pipeline/auto_vitals.dart';
 import '../pipeline/cnn_models.dart';
 import '../pipeline/imu_input.dart';
 import '../pipeline/pipeline_runner.dart';
 import '../pipeline/test_subject.dart';
 import 'collar_link.dart';
+import 'emergency_controller.dart';
+import 'location_controller.dart';
 import 'vitals_session.dart';
 
 typedef ImuInputFactory = ImuInput Function(InputKind kind, ContinuousMonitor m);
 
 ImuInput _defaultFactory(InputKind kind, ContinuousMonitor m) => kind == InputKind.unity
     ? UnityImuInput(m.unityUrl)
-    : FakeImuInput(speed: m.fakeSpeed);
+    // T36：模拟の GPS は家から出発する（家がなければ上海の既定）
+    : FakeImuInput(speed: m.fakeSpeed, home: m.location?.zone?.center);
 
 class ContinuousMonitor extends ChangeNotifier {
-  ContinuousMonitor({required this.link, required this.runner, this.vitals, ImuInputFactory? inputFactory})
-      : _factory = inputFactory ?? _defaultFactory;
+  ContinuousMonitor(
+      {required this.link,
+      required this.runner,
+      this.vitals,
+      this.location,
+      this.emergency,
+      ImuInputFactory? inputFactory})
+      : _factory = inputFactory ?? _defaultFactory {
+    emergency?.attachTo(runner);
+  }
+
+  /// T34-G：緊急の見張り（冲击・倒下・心率异常）。null なら見ない。
+  final EmergencyController? emergency;
 
   final CollarLink link;
   final PipelineRunner runner;
   final VitalsSession? vitals;
+
+  /// T36：位置と安全区。記録の入力から GPS を渡す。null なら位置は扱わない。
+  final LocationController? location;
+  StreamSubscription<LocationFix>? _gpsSub;
+  StreamSubscription<TempReading>? _tempSub; // T11
   final ImuInputFactory _factory;
 
   static const String _kKind = 'monitor.input';
@@ -156,6 +177,7 @@ class ContinuousMonitor extends ChangeNotifier {
     if (running || starting) return;
     starting = true;
     errorMessage = null;
+    emergency?.resetWatch();
     runner.sessionInfo = <String, Object?>{
       'input': kind.name,
       'subject': subject.toJson(),
@@ -206,6 +228,10 @@ class ContinuousMonitor extends ChangeNotifier {
       return;
     }
     _sub = imu.listen(runner.addPet);
+    final Stream<LocationFix>? fx = link.fixes;
+    if (fx != null) _attachGps(fx);
+    final Stream<TempReading>? tp = link.temps;
+    if (tp != null) _tempSub = tp.listen(runner.addTemp);
     link.archive?.event('monitor_start', <String, Object?>{
       'started_at_ms': DateTime.now().millisecondsSinceEpoch,
       'imu_rate_hz': link.activeImuRateHz,
@@ -218,11 +244,14 @@ class ContinuousMonitor extends ChangeNotifier {
     _input = input;
     _inSub = input.samples.listen(runner.add);
     _markSub = input.marks.listen(runner.addTruth);
-    input.addListener(notifyListeners);
+    _attachGps(input.fixes);
+    _tempSub = input.temps.listen(runner.addTemp);
+    input.addListener(_onInput);
     try {
       await input.start();
     } on Object catch (e) {
       errorMessage = input.error ?? 'start_failed|$e';
+      await _detachGps();
       await _closeInput();
     }
   }
@@ -237,13 +266,39 @@ class ContinuousMonitor extends ChangeNotifier {
     await _markSub?.cancel();
     _inSub = null;
     _markSub = null;
-    input.removeListener(notifyListeners);
+    input.removeListener(_onInput);
     input.dispose();
   }
 
+  /// T36：GPS を位置の管理と記録の両方へ。
+  void _attachGps(Stream<LocationFix> fixes) {
+    final Stream<LocationFix> b = fixes.isBroadcast ? fixes : fixes.asBroadcastStream();
+    unawaited(_gpsSub?.cancel());
+    _gpsSub = b.listen(runner.addGps);
+    location?.attach(b);
+  }
+
+  Future<void> _detachGps() async {
+    await _gpsSub?.cancel();
+    _gpsSub = null;
+    await _tempSub?.cancel();
+    _tempSub = null;
+    location?.detach();
+  }
+
+  void _onInput() {
+    // 模拟の「模拟断开」：BLE が切れたのと同じに扱う（記録は続ける）
+    final ImuInput? i = _input;
+    if (i != null) location?.setLinked(i.linked);
+    notifyListeners();
+  }
+
   void _onLink() {
-    // 首輪が離れた：取れた分は計算して残す。
-    if (running && runningKind == InputKind.collar && !link.isConnected) unawaited(_end(stopDevice: false));
+    // 首輪が離れた：取れた分は計算して残す。外にいたら「可能走失」（T36、先に伝えてから止める）
+    if (running && runningKind == InputKind.collar && !link.isConnected) {
+      location?.setLinked(false);
+      unawaited(_end(stopDevice: false));
+    }
   }
 
   Future<void> stop() => _end(stopDevice: true);
@@ -253,6 +308,8 @@ class ContinuousMonitor extends ChangeNotifier {
     running = false;
     final InputKind? k = runningKind;
     runningKind = null;
+    await _detachGps();
+    emergency?.resetWatch();
     if (k == InputKind.collar) {
       link.removeListener(_onLink);
       await _sub?.cancel();
@@ -282,6 +339,8 @@ class ContinuousMonitor extends ChangeNotifier {
     _sub?.cancel();
     _inSub?.cancel();
     _markSub?.cancel();
+    _gpsSub?.cancel();
+    _tempSub?.cancel();
     _input?.dispose();
     super.dispose();
   }

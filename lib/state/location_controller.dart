@@ -1,133 +1,214 @@
-import 'dart:async';
+/// T36：犬の位置と安全区（家）。
+///
+/// 位置は記録の入力（首輪 BLE／模拟）から [attach] で受け取る（前は古い CollarController を見ていて、
+/// そちらは一度もつながれていなかったので、位置はずっと空だった）。
+/// 出入りの判定は [ZoneJudge]（余裕 20 m・外が 2 回続く、D-059 M5）。
+/// 「可能走失」（外＋BLE が切れた、M3）と「回到了安全区」のときだけ通知する（M4）。
+/// 家は地図の長押しで決め（M2）、shared_preferences に残す。
+library;
 
-import 'package:collar_data/collar_data.dart';
+import 'dart:async';
+import 'dart:convert';
+
 import 'package:collar_geo/collar_geo.dart';
 import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
-import 'collar_controller.dart';
+import '../data/gps_track.dart';
+import '../data/safe_zone.dart';
+import '../data/temp_judge.dart' show localDateOf;
+import 'app_notifier.dart';
 
-/// GPS 機能の状態。CollarController(接続・心拍・呼吸)とは別に持っている
-/// のは、心拍/呼吸まわりのロジックと位置/囲い判定のロジックが関心事として
-/// 独立しているため——`packages/collar_geo` が `collar_data` と別パッケージ
-/// なのと同じ理由。
-///
-/// [CollarController] が受信した [SensorSample] を監視し、位置情報
-/// (`lat`/`lng`)が乗っているものだけを取り出して、地理囲い判定に回す。
-/// ソケットや JSON、フィルタの中身はここでも一切扱わない。
 class LocationController extends ChangeNotifier {
   LocationController({
-    required this.collar,
-    GeofenceConfig? homeFence,
-  }) : homeFence = homeFence ?? defaultHomeFence {
-    _tracker = GeofenceTracker(<GeofenceConfig>[this.homeFence]);
-    collar.addListener(_onCollarChanged);
-    _offlineTimer = Timer.periodic(const Duration(seconds: 15), (_) => _checkOffline());
+    this.notifier,
+    int Function()? nowMs,
+    Duration? tick = const Duration(seconds: 15),
+    this.offlineAfter = const Duration(minutes: 2),
+  }) : _nowMs = nowMs ?? (() => DateTime.now().millisecondsSinceEpoch) {
+    if (tick != null) _timer = Timer.periodic(tick, (_) => _checkOffline());
   }
 
-  /// プレースホルダーの初期値。実際の「家」の座標が決まったら、設定画面
-  /// などから [setHomeFence] で上書きする想定。
-  static const GeofenceConfig defaultHomeFence = GeofenceConfig(
-    id: 'home',
-    name: 'home',
-    center: GeoPoint(31.2304, 121.4737),
-    radiusM: 150,
-  );
+  final AppNotifier? notifier;
+  final int Function() _nowMs;
+  final Duration offlineAfter;
+  Timer? _timer;
 
-  /// このぶん新しい位置が来なければ「オフライン(最後に確認された位置)」
-  /// 扱いにする。前回 React Native 版で作った MapScreen と同じ閾値。
-  static const Duration offlineThreshold = Duration(minutes: 2);
+  static const String _kZone = 'location.home_zone';
+  static const int maxEvents = 50;
 
-  final CollarController collar;
-  late final GeofenceTracker _tracker;
-  Timer? _offlineTimer;
+  /// 家（安全区）。まだ決めていなければ null（判定しない）。
+  SafeZone? zone;
+  ZoneJudge? _judge;
 
-  GeofenceConfig homeFence;
+  /// 判定を始める前（家を決める前）の最後の位置も覚えておく。
+  LocationFix? lastFix;
 
-  /// 直近の位置(WGS84)。まだ一度も GPS フィックスを受信していなければ null。
-  GeoPoint? latestPosition;
+  /// 出た・戻った・可能走失（新しいものが先）。
+  final List<ZoneEvent> events = <ZoneEvent>[];
 
-  /// 直近フィックスの精度の「目安」(メートル)。分からなければ null。
-  ///
-  /// ⚠️ これは実測値ではない。首輪は精度を一切送ってこないので、NMEA の
-  /// GGA から取れる HDOP(無次元の倍率)に受信機ごとの定数 5m を掛けた
-  /// 概算にすぎない。UI では必ず「目安」と分かる形で見せる。
-  int? latestAccuracyM;
+  bool _linked = true;
+  StreamSubscription<LocationFix>? _sub;
+  bool _wasOffline = false;
 
-  /// 直近の測位品質(GGA の fix quality)。0 は未測位。
-  int? latestFixQuality;
+  // ---- 地図の画面（MapPage）が使うもの
 
-  /// 直近の測位に使われた衛星数。0 なら空が見えていない。
-  int? latestSatellites;
+  GeoPoint? get latestPosition => lastFix?.point;
+  int? get latestAccuracyM => lastFix?.accuracyM;
 
-  DateTime? _lastFixAt;
+  /// 最後の位置が古い（[offlineAfter] より前）。
+  bool get isOffline => lastFix != null && _nowMs() - lastFix!.tMs > offlineAfter.inMilliseconds;
 
-  /// true の間は [latestPosition] が「最後に確認された位置」であり、
-  /// リアルタイムの位置ではないことを示す。UI 側はマーカーを薄く表示したり
-  /// 「n分前」を出したりする。
-  bool isOffline = false;
+  Duration? get sinceLastFix => lastFix == null ? null : Duration(milliseconds: _nowMs() - lastFix!.tMs);
 
-  /// 直近で発生した地理囲いイベント(enter/exit)。UI 側がこれを見て
-  /// バナー文言を(AppStrings 経由で)組み立てる。ここでは翻訳済み文字列を
-  /// 持たない — ConnStatus と同じ扱い方。
-  GeofenceEvent? lastEvent;
-
-  /// 最後に GPS フィックスを受信してからの経過時間。まだ一度も受信して
-  /// いなければ null。
-  Duration? get sinceLastFix =>
-      _lastFixAt == null ? null : DateTime.now().difference(_lastFixAt!);
-
-  void setHomeFence(GeofenceConfig fence) {
-    homeFence = fence;
-    _tracker.setFences(<GeofenceConfig>[fence]);
-    notifyListeners();
+  /// 地図に描く円（高德の部品が使う形）。
+  GeofenceConfig? get homeFence {
+    final SafeZone? z = zone;
+    return z == null ? null : GeofenceConfig(id: 'home', name: z.name, center: z.center, radiusM: z.radiusM);
   }
 
-  void _onCollarChanged() {
-    final SensorSample? sample = collar.latest;
-    if (sample == null) return;
+  ZoneEvent? get lastEvent => events.isEmpty ? null : events.first;
 
-    // 測位品質は位置が無くても記録しておく。「衛星0個」と「モジュール無応答」
-    // を UI で区別できるのは、この2つの値だけ。
-    latestFixQuality = sample.fixQuality ?? latestFixQuality;
-    latestSatellites = sample.satellites ?? latestSatellites;
+  // ---- 状態
 
-    // hasLocation は座標の有無だけでなく測位品質も見る。正しい書式の NMEA が
-    // 品質0で延々と届くのが屋内での通常状態なので、ここを緩めると「測位して
-    // いないのに地図に犬が出る」ことになる。
-    if (!sample.hasLocation) {
+  ZoneState get state => _judge?.state ?? ZoneState.unknown;
+  double? get distanceM {
+    final SafeZone? z = zone;
+    final LocationFix? f = lastFix;
+    return z == null || f == null ? null : z.distanceTo(f.point);
+  }
+
+  bool get linked => _linked;
+  bool get attached => _sub != null;
+
+  // ---- 家
+
+  Future<void> loadSaved() async {
+    try {
+      final SharedPreferences p = await SharedPreferences.getInstance();
+      final String? j = p.getString(_kZone);
+      if (j == null) return;
+      final SafeZone? z = SafeZone.fromJson(jsonDecode(j) as Map<String, dynamic>);
+      if (z != null) _setZone(z);
       notifyListeners();
-      return;
+    } catch (_) {
+      // 読めなければ「家はまだない」のまま
     }
+  }
 
-    final GeoPoint point = GeoPoint(sample.lat!, sample.lng!);
-    latestPosition = point;
-    latestAccuracyM = sample.estimatedAccuracyM?.round();
-    latestFixQuality = sample.fixQuality;
-    latestSatellites = sample.satellites;
-    _lastFixAt = DateTime.now();
-    isOffline = false;
-
-    final List<GeofenceEvent> events = _tracker.update(point);
-    if (events.isNotEmpty) {
-      lastEvent = events.last;
-    }
-
+  /// 家を決める（地図の長押し、WGS84 で渡す）。前の家での出入りの状態は持ち越さない。
+  Future<void> setHome(GeoPoint center, double radiusM) async {
+    _setZone(SafeZone(center: center, radiusM: radiusM));
     notifyListeners();
+    try {
+      final SharedPreferences p = await SharedPreferences.getInstance();
+      await p.setString(_kZone, jsonEncode(zone!.toJson()));
+    } catch (_) {
+      // 保存できなくても今回は使える
+    }
+  }
+
+  void _setZone(SafeZone z) {
+    zone = z;
+    final ZoneJudge j = ZoneJudge(zone: z, linked: _linked);
+    _judge = j;
+    final LocationFix? f = lastFix;
+    if (f != null) j.update(f); // 今の位置から判定を始める（出来事は出さない）
+  }
+
+  // ---- 位置の入力
+
+  /// 記録を始めたとき（ContinuousMonitor から）。つながっている状態で始める。
+  void attach(Stream<LocationFix> fixes) {
+    unawaited(_sub?.cancel());
+    _sub = fixes.listen(addFix);
+    setLinked(true);
+  }
+
+  /// 記録を止めたとき。最後の位置と状態は残す（地図・安全タブに出し続ける）。
+  void detach() {
+    unawaited(_sub?.cancel());
+    _sub = null;
+    notifyListeners();
+  }
+
+  // ---- T12：今日の屋外の距離・時間（安全タブ）。1 日まとめと同じ計算（GpsTracker）
+  final GpsTracker _tracker = GpsTracker();
+  String? _todayDate;
+  double todayOutdoorM = 0;
+  double todayOutdoorMin = 0;
+
+  /// 今日（UTC＋8）の屋外の距離・時間の一行。今日の位置がまだなければ null。
+  String? get todayOutdoorLine {
+    final LocationFix? f = lastFix;
+    if (f == null || _todayDate != localDateOf(_nowMs())) return null;
+    return '今天户外：${outdoorText(todayOutdoorM, todayOutdoorMin)}';
+  }
+
+  void _track(LocationFix f) {
+    final String d = localDateOf(f.tMs);
+    if (d != _todayDate) {
+      _todayDate = d;
+      todayOutdoorM = 0;
+      todayOutdoorMin = 0;
+      _tracker.reset();
+    }
+    final int? acc = f.accuracyM;
+    final TrackPoint? p = _tracker.add(
+        GpsPoint(tMs: f.tMs, lat: f.point.lat, lng: f.point.lng, hdop: acc == null ? null : acc / 5));
+    if (p != null) {
+      todayOutdoorM += p.stepM;
+      todayOutdoorMin += p.dtS / 60;
+    }
+  }
+
+  void addFix(LocationFix f) {
+    lastFix = f;
+    _wasOffline = false;
+    _track(f);
+    final ZoneJudge? j = _judge;
+    if (j != null) _handle(j.update(f));
+    notifyListeners();
+  }
+
+  /// 首輪とスマホの BLE がつながった／切れた（模拟では「模拟断开」）。
+  void setLinked(bool linked) {
+    if (linked == _linked) return;
+    _linked = linked;
+    final ZoneJudge? j = _judge;
+    if (j != null) _handle(j.setLinked(linked, _nowMs()));
+    notifyListeners();
+  }
+
+  void _handle(List<ZoneEvent> evs) {
+    for (final ZoneEvent e in evs) {
+      events.insert(0, e);
+      if (events.length > maxEvents) events.removeLast();
+      final String d = distanceText(e.distanceM);
+      switch (e.kind) {
+        case ZoneEventKind.lost:
+          unawaited(notifier?.show(
+              key: 'zone', title: '可能走失', body: '狗在安全区外面（离家 $d），项圈和手机断开了。最后的位置在「安全」页。'));
+        case ZoneEventKind.enter:
+          unawaited(notifier?.show(key: 'zone', title: '回到了安全区', body: '狗回到了家附近（离中心 $d）。'));
+        case ZoneEventKind.exit:
+          break; // 外に出ただけ（散歩など）は通知しない。安全タブに出す
+      }
+    }
   }
 
   void _checkOffline() {
-    if (_lastFixAt == null) return;
-    final bool stale = DateTime.now().difference(_lastFixAt!) > offlineThreshold;
-    if (stale != isOffline) {
-      isOffline = stale;
+    final bool off = isOffline;
+    if (off != _wasOffline) {
+      _wasOffline = off;
       notifyListeners();
     }
   }
 
   @override
   void dispose() {
-    collar.removeListener(_onCollarChanged);
-    _offlineTimer?.cancel();
+    _timer?.cancel();
+    unawaited(_sub?.cancel());
     super.dispose();
   }
 }

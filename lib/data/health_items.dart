@@ -50,7 +50,7 @@ const List<BoardInfo> boardInfos = <BoardInfo>[
     HealthItem('rest_hr', '安静时心率', real: true),
     HealthItem('rr', '呼吸数', real: true),
     HealthItem('ecg_like', '像心电图的波形', real: true),
-    HealthItem('temp', '体温（发烧・下降）'),
+    HealthItem('temp', '体温（发烧・下降）', real: true, trial: true),
     HealthItem('tremble', '发抖', real: true, trial: true),
     HealthItem('recovery', '运动后的恢复'),
     HealthItem('excretion', '排尿・排便'),

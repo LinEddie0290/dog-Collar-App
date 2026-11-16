@@ -26,6 +26,16 @@ class ItemPage extends StatelessWidget {
     final double? u = s.usual;
     final List<ItemDay> d14 = s.recent14;
     final String diff = diffText(s);
+    // T11：体温は「平时 ±X℃」を大きく、皮膚の温度は小さく参考（K2）
+    final bool abs = s.spec.bandAbs != null;
+    final double? d = s.diffAbs;
+    final String big = !abs || s.today == null
+        ? s.format(s.today)
+        : d == null
+            ? '收集中'
+            : '平时 ${d >= 0 ? '+' : '−'}${d.abs().toStringAsFixed(1)}${s.spec.unit}';
+    final String small = abs && s.today != null ? '皮肤温度 ${s.format(s.today)}（参考）　${diff.split('（').first}' : diff;
+    final bool provisional = abs && u != null && s.usualDaysHave < 14;
 
     return Scaffold(
       backgroundColor: WaterColors.bgTop,
@@ -68,13 +78,20 @@ class ItemPage extends StatelessWidget {
                       ),
               )
             else ...<Widget>[
-              Text(s.format(s.today),
+              Text(big,
                   key: const ValueKey<String>('item-today'),
                   style: TextStyle(fontSize: 34, fontWeight: FontWeight.w700, color: Color.lerp(c, Colors.black, 0.2))),
-              if (diff.isNotEmpty)
-                Text(diff,
+              if (small.isNotEmpty)
+                Text(small,
                     key: const ValueKey<String>('item-diff'),
                     style: const TextStyle(fontSize: 14, color: WaterColors.value)),
+              if (s.note != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Text(s.note!,
+                      key: const ValueKey<String>('item-note'),
+                      style: const TextStyle(fontSize: 14, color: WaterColors.value)),
+                ),
             ],
             if (s.alert != null) ...<Widget>[
               const SizedBox(height: 12),
@@ -112,6 +129,7 @@ class ItemPage extends StatelessWidget {
                         color: c,
                         usual: u,
                         bandPct: bandPct,
+                        bandAbs: s.spec.bandAbs,
                       ),
                     ),
                     Row(
@@ -123,7 +141,11 @@ class ItemPage extends StatelessWidget {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      u == null ? '平时：数据收集中（需要 $minUsualDays 天以上）' : '平时 ${s.format(u)}（带子是 ±$bandPct%）',
+                      u == null
+                          ? '平时：数据收集中（需要 ${s.spec.minUsualDays ?? minUsualDays} 天以上）'
+                          : abs
+                              ? '平时 ${s.format(u)}（带子是 ±${s.spec.bandAbs!.toStringAsFixed(1)}${s.spec.unit}${provisional ? '，不满 14 天，是暂定的' : ''}）'
+                              : '平时 ${s.format(u)}（带子是 ±$bandPct%）',
                       key: const ValueKey<String>('item-usual'),
                       style: const TextStyle(fontSize: 11, color: WaterColors.sub),
                     ),

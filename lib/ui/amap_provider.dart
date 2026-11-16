@@ -30,6 +30,7 @@ class AmapMapProvider implements MapProvider {
     GeoPoint? dogPosition,
     bool dogPositionIsStale = false,
     GeofenceConfig? fence,
+    ValueChanged<GeoPoint>? onLongPress,
   }) {
     final GeoPoint centerGcj02 = wgs84ToGcj02(initialCenter);
 
@@ -51,8 +52,8 @@ class AmapMapProvider implements MapProvider {
       polygons.add(Polygon(
         points: points,
         strokeWidth: 2,
-        strokeColor: const Color(0xFFB85042),
-        fillColor: const Color(0x26B85042), // アクセントカラーを薄く
+        strokeColor: const Color(0xFF0A93BE),
+        fillColor: const Color(0x260A93BE), // 主役の水色を薄く（T35 の色）
       ));
     }
 
@@ -63,6 +64,10 @@ class AmapMapProvider implements MapProvider {
       ),
       markers: markers,
       polygons: polygons,
+      // 高德から来る座標は GCJ-02。外には WGS84 で渡す（collar_geo の約束）
+      onLongPress: onLongPress == null
+          ? null
+          : (LatLng p) => onLongPress(gcj02ToWgs84(GeoPoint(p.latitude, p.longitude))),
     );
   }
 }

@@ -43,7 +43,7 @@ WindowState _st(int i, {required bool rest, double stillS = 0}) => WindowState(
 
 void main() {
   group('六大板块の一覧', () {
-    test('Board の順と同じ・項目の id は重ならない・本物は运动・睡眠・生理・皮肤（试用は挠・舔・发抖）', () {
+    test('Board の順と同じ・項目の id は重ならない・本物は运动・睡眠・生理・皮肤（试用は挠・舔・发抖・体温）', () {
       expect(boardInfos.map((BoardInfo b) => b.board).toList(), Board.values);
       expect(boardInfos.map((BoardInfo b) => b.name).toList(), <String>['运动', '睡眠', '生理', '皮肤', '心理', '饮食']);
       final List<String> ids = <String>[for (final BoardInfo b in boardInfos) ...b.items.map((HealthItem i) => i.id)];
@@ -57,7 +57,7 @@ void main() {
       final Set<String> trial = <String>{
         for (final BoardInfo b in boardInfos) ...b.items.where((HealthItem i) => i.trial).map((HealthItem i) => i.id),
       };
-      expect(trial, <String>{'scratch', 'lick', 'tremble'});
+      expect(trial, <String>{'scratch', 'lick', 'tremble', 'temp'}); // T11：体温（皮膚の温度、平時との差）
       for (final BoardInfo b in boardInfos) {
         for (final HealthItem i in b.items.where((HealthItem i) => i.trial)) {
           expect(i.real, isTrue, reason: i.id); // 试用は本物の中だけ

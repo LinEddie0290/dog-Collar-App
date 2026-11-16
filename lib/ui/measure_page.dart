@@ -623,7 +623,7 @@ class _TipsCard extends StatelessWidget {
             const SizedBox(height: 10),
             ...<String>[
               s.tipSensorPlacement,
-              s.tipPartFur,
+              s.tipWaitCalm,
               s.tipStayStill,
               s.tipKeepPhoneClose,
             ].map((String t) => Padding(

@@ -14,6 +14,7 @@ import 'package:collar_pipeline/collar_pipeline.dart' show dateKey;
 
 import '../l10n/summary_text.dart';
 import 'daily_summary.dart';
+import 'gps_track.dart' show outdoorText;
 import 'health_items.dart';
 import 'item_specs.dart';
 
@@ -37,7 +38,8 @@ class ItemDay {
 }
 
 class ItemSeries {
-  const ItemSeries({required this.item, required this.spec, required this.days, required this.demo, this.alert});
+  const ItemSeries(
+      {required this.item, required this.spec, required this.days, required this.demo, this.alert, this.note});
 
   final HealthItem item;
   final ItemSpec spec;
@@ -65,9 +67,24 @@ class ItemSeries {
       for (final ItemDay d in days.sublist(start, end))
         if (d.value != null) d.value!,
     ]..sort();
-    if (v.length < minUsualDays) return null;
+    if (v.length < (spec.minUsualDays ?? minUsualDays)) return null;
     final int n = v.length;
     return n.isOdd ? v[n ~/ 2] : (v[n ~/ 2 - 1] + v[n ~/ 2]) / 2;
+  }
+
+  /// T11：平時に使える日（今日より前の 14 日で値のある日）の数。
+  int get usualDaysHave {
+    if (days.length < 2) return 0;
+    final int end = days.length - 1;
+    final int start = end - 14 < 0 ? 0 : end - 14;
+    return days.sublist(start, end).where((ItemDay d) => d.value != null).length;
+  }
+
+  /// T11：今日 − 平時（±値の帯の項目）。比べられないときは null。
+  double? get diffAbs {
+    final double? t = today;
+    final double? u = usual;
+    return t == null || u == null ? null : t - u;
   }
 
   /// 今日と平時の差（%、四捨五入）。比べられないときは null。
@@ -80,11 +97,18 @@ class ItemSeries {
 
   /// 今日が平時の帯（±[bandPct]%）の中か。比べられないときは null。
   bool? get inBand {
+    if (spec.bandAbs != null) {
+      final double? d = diffAbs;
+      return d == null ? null : d.abs() < spec.bandAbs!;
+    }
     final int? p = diffPct;
     return p == null ? null : p.abs() <= bandPct;
   }
 
   String format(double? v) => formatItemValue(spec, v);
+
+  /// 補足の一行（运动量：今天户外 X km・X 分钟）。なければ null。
+  final String? note;
 }
 
 String formatItemValue(ItemSpec s, double? v) {
@@ -202,6 +226,9 @@ ItemSeries buildItemSeries(String itemId, {required String today, SummaryBundle?
         return raw[d]?['lick_min'];
       case 'tremble':
         return raw[d]?['shake_count'];
+      // T11：皮膚の温度の 1 日の値（安定した 1 分の中央値）
+      case 'temp':
+        return raw[d]?['temp_c'];
       default:
         return null;
     }
@@ -220,7 +247,15 @@ ItemSeries buildItemSeries(String itemId, {required String today, SummaryBundle?
     demo: false,
     days: days,
     alert: a == null ? null : const SummaryTextZh().alert(a),
+    note: itemId == 'activity' ? _outdoorNote(raw[today]) : null,
   );
+}
+
+/// T12：今天户外的距离・时间（GPS）。なければ null。
+String? _outdoorNote(Map<String, double>? r) {
+  final double? m = r?['outdoor_m'];
+  if (m == null) return null;
+  return '今天户外 ${outdoorText(m, r?['outdoor_min'] ?? 0)}（GPS）';
 }
 
 /// 板块の全部の項目（一覧の順）。

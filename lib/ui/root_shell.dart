@@ -3,7 +3,6 @@ import 'package:flutter/services.dart';
 
 import '../data/daily_summary.dart';
 import '../l10n/app_strings.dart';
-import '../state/collar_controller.dart';
 import '../state/collar_link.dart';
 import '../state/continuous_monitor.dart';
 import '../state/locale_controller.dart';
@@ -23,7 +22,6 @@ import 'water_tab_bar.dart';
 class RootShell extends StatefulWidget {
   const RootShell({
     super.key,
-    required this.controller,
     required this.localeController,
     required this.locationController,
     required this.vitalsSession,
@@ -32,8 +30,6 @@ class RootShell extends StatefulWidget {
     this.liveSummary,
   });
 
-  /// 古いつなぎ方。今は地図（安全）の位置のためだけに残している（T12 で本物の GPS に替えるときに消す）。
-  final CollarController controller;
   final LocaleController localeController;
   final LocationController locationController;
   final VitalsSession vitalsSession;
@@ -83,7 +79,8 @@ class _RootShellState extends State<RootShell> {
       SafetyPage(
         monitor: widget.monitor,
         link: widget.collarLink,
-        map: MapPage(controller: widget.controller, locationController: widget.locationController),
+        location: widget.locationController,
+        map: MapPage(locationController: widget.locationController),
       ),
       // 我的：狗的信息・项圈・言語・データ・开发（記録・テスト画面、每天（旧）、CNN の速さ）
       SettingsPage(

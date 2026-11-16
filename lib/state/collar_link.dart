@@ -14,11 +14,14 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:collar_data/collar_data.dart';
+import 'package:collar_geo/collar_geo.dart';
 import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 
 import '../data/ble_collar_data_source.dart';
 import '../data/known_device.dart';
+import '../data/safe_zone.dart';
+import '../data/temp_judge.dart';
 
 enum LinkState {
   disconnected,
@@ -111,6 +114,21 @@ class CollarLink extends ChangeNotifier {
 
   /// Full-rate IMU samples, once connected. Null when there is no link.
   Stream<PetImuSample>? get imuSamples => _source?.imuSamples;
+
+  /// T36：GPS の位置（WGS84）。つないでいないときは null。
+  ///
+  /// 首輪は位置を 250 ms ごとのまとめ（frames）に入れて送るので、同じ位置が何度も来る。
+  /// 位置が変わったときか、前に出してから 1 秒たったときだけ出す（[fixesFromFrames]）。
+  Stream<LocationFix>? get fixes {
+    final BleCollarDataSource? s = _source;
+    return s == null ? null : fixesFromFrames(s.frames);
+  }
+
+  /// T11：首輪の温度（物体・環境）。値が変わったときか、1 秒たったときだけ（[tempsFromFrames]）。
+  Stream<TempReading>? get temps {
+    final BleCollarDataSource? s = _source;
+    return s == null ? null : tempsFromFrames(s.frames);
+  }
 
   int? get negotiatedMtu => _source?.negotiatedMtu;
   int? get activeImuRateHz => _source?.activeImuRateHz;
@@ -364,4 +382,41 @@ String friendlyError(Object e) {
     return 'busy';
   }
   return 'connect_failed';
+}
+
+/// T36：250 ms ごとのまとめ（[RawFrame]）から位置だけを取り出す。
+/// 測位していない（品質 0）まとめは出さない。同じ位置は 1 秒に 1 回まで。
+Stream<LocationFix> fixesFromFrames(Stream<RawFrame> frames, {int minGapMs = 1000}) {
+  double? lastLat, lastLng;
+  int lastMs = 0;
+  return frames.map(SensorSample.fromRaw).where((SensorSample s) {
+    if (!s.hasLocation) return false;
+    final bool moved = s.lat != lastLat || s.lng != lastLng;
+    if (!moved && s.rxTs - lastMs < minGapMs) return false;
+    lastLat = s.lat;
+    lastLng = s.lng;
+    lastMs = s.rxTs;
+    return true;
+  }).map((SensorSample s) => LocationFix(
+        point: GeoPoint(s.lat!, s.lng!),
+        tMs: s.rxTs,
+        accuracyM: s.estimatedAccuracyM?.round(),
+        source: 'collar',
+      ));
+}
+
+/// T11：250 ms ごとのまとめ（RawFrame）→ 温度。両方の値がある・値が変わったか 1 秒たったときだけ。
+Stream<TempReading> tempsFromFrames(Stream<RawFrame> frames, {int minGapMs = 1000}) {
+  double? lastObj, lastAmb;
+  int lastMs = 0;
+  return frames.map(SensorSample.fromRaw).where((SensorSample s) {
+    final double? o = s.bodyTempC, a = s.ambientTempC;
+    if (o == null || a == null) return false;
+    final bool changed = o != lastObj || a != lastAmb;
+    if (!changed && s.rxTs - lastMs < minGapMs) return false;
+    lastObj = o;
+    lastAmb = a;
+    lastMs = s.rxTs;
+    return true;
+  }).map((SensorSample s) => TempReading(tMs: s.rxTs, objC: s.bodyTempC!, ambC: s.ambientTempC!, source: 'collar'));
 }

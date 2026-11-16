@@ -83,6 +83,7 @@ class VitalsResult {
     this.beatRateBpm,
     this.rateDisagrees = false,
     this.rateFromBeats = false,
+    this.respirationBandRatio,
   });
 
   final double sampleRateHz;
@@ -148,6 +149,9 @@ class VitalsResult {
   final double? respirationPerMin;
   final double respirationConfidence;
 
+  /// T31：呼吸の帯 ÷ 心拍の帯（RMS）。[VitalsAnalyzer.minRespirationRatio] より小さいと呼吸を出さない。
+  final double? respirationBandRatio;
+
   /// Filtered waveforms, kept so the UI can draw what was actually analysed
   /// rather than a decorative line.
   final List<double> beatBand;
@@ -207,6 +211,7 @@ class VitalsAnalyzer {
     this.minConfidenceFair = 0.15,
     this.irregularFairPercent = 35.0,
     this.irregularUnusablePercent = dogIrregularUnusablePercent,
+    this.minRespirationRatio = 0.07,
   });
 
   final HeartRateRange range;
@@ -240,6 +245,14 @@ class VitalsAnalyzer {
   final double respirationLowHz;
   final double respirationHighHz;
 
+  /// T31（D-064）：呼吸の帯の強さの下限（呼吸の帯 ÷ 心拍の帯、RMS）。これより小さいと呼吸を出さない。
+  ///
+  /// 自己相関は大きさを見ないので、息を止めていても、呼吸の帯に漏れた規則正しい心拍の 4〜9 拍分を
+  /// 1 回の呼吸と取り違えて数字を出していた（合成の息止めで 18 回/分・good）。11-15 の比較：
+  /// 息止めの比は合成 0.025〜0.058・本物（首）0.053、呼吸ありは本物の胸 0.10〜0.29・合成 5 以上。
+  /// 0.07 は仮（余裕は大きくない）。L6 で犬の録画の呼吸と比べて直す。
+  final double minRespirationRatio;
+
   final double minConfidenceGood;
   final double minConfidenceFair;
 
@@ -262,6 +275,15 @@ class VitalsAnalyzer {
   /// 標準偏差ではなく中央値を使うのは、拍を1つ数え落とすと間隔が2倍の値に
   /// なり、それが数個混ざるだけで標準偏差が壊れるから。中央値なら半分以上が
   /// 正しければ保たれる。
+  static double _rms(List<double> x) {
+    if (x.isEmpty) return 0;
+    double s = 0;
+    for (final double v in x) {
+      s += v * v;
+    }
+    return math.sqrt(s / x.length);
+  }
+
   static double _rmadPercent(List<double> intervals) {
     final List<double> sorted = List<double>.of(intervals)..sort();
     final double median = sorted[sorted.length ~/ 2];
@@ -432,6 +454,10 @@ class VitalsAnalyzer {
           minLagSamples: (sampleRateHz * 60 / 60).floor());
       rr = 60 * sampleRateHz / respAc.refinedLag(respLag);
     }
+    // T31：呼吸の帯が心拍の帯に比べて小さすぎる＝呼吸は見えていない（心拍の漏れを数えている）
+    final double bandRms = _rms(band);
+    final double? respRatio = bandRms > 0 ? _rms(resp) / bandRms : null;
+    if (rr != null && (respRatio == null || respRatio < minRespirationRatio)) rr = null;
 
     // 拍の間隔の中央値から出した心拍。自己相関の答えと突き合わせる。
     // 中央値なので、数え落としで1つ2つ長い間隔が混ざっても崩れない。
@@ -516,6 +542,7 @@ class VitalsAnalyzer {
       rmssdMs: rmssd,
       respirationPerMin: rr,
       respirationConfidence: respAc.bestValue.clamp(0.0, 1.0),
+      respirationBandRatio: respRatio,
       beatBand: band,
       beatEnvelope: env,
       respirationWave: resp,
