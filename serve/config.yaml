@@ -1,0 +1,20 @@
+presence_window_s: 1.0
+type_window_s: 2.0
+hop_s: 0.25
+gap_s: 1.0
+cfg:
+  th: 0.85
+  r: 0.75
+  m: 3
+  o_on: 0.0934404999999856
+  o_off: -0.2628699999999995
+# class_map: 7-class type -> App slot. EMPTY by default on purpose: the type
+# head does NOT separate bark vs growl vs whine/grunt/moan — they all fall under
+# the single generic `dog` class (see model_a_manifest.json per-class F1). So we
+# do NOT fill the App's bark/growl slots (that would mislabel a moan/growl as a
+# bark). `dog` events are surfaced with app_slot=null + class="dog" (generic
+# vocalization); the App decides how to show it. Add a mapping here ONLY for a
+# class the head truly distinguishes — e.g. uncomment `coughing: cough` etc.
+class_map: {}
+_note: cfg tuned on full dogplay with the deployed all-data presence head; operating
+  point, NOT a held-out metric. Held-out presence onset F1=0.562.

@@ -1,0 +1,56 @@
+{
+  "component": "Model B — state layer (server-side, feeds App 心理 board)",
+  "created": "2026-11-17",
+  "stance": "relative to this dog's own baseline; welfare/health; NO emotion translation, NO diagnosis",
+  "reuses": "monitor/ (events, aggregate, baseline, detect-CUSUM k=0.75, report)",
+  "heads": {
+    "arousal": {
+      "file": "model_b_arousal.pkl",
+      "role": "per-event arousal intensity (CED+LR, 3-class -> expected value 0..2)",
+      "labels": [
+        "Low",
+        "Medium",
+        "High"
+      ],
+      "C": 0.001,
+      "n_train": 1400,
+      "accept_acc": 0.505,
+      "report_acc": 0.51,
+      "shuffled": 0.355,
+      "status": "refit this round, reproduced",
+      "caveat": "OOD on collar audio -> regresses to ~1.0 prior; weak relative signal only (acc 0.505)"
+    },
+    "wearer_voiceprint": {
+      "file": "model_b_wearer_voiceprint.pkl",
+      "role": "CED whiten + within-dog LDA cosine (monitor/wearer.WearerVerifier)",
+      "enabled_default": false,
+      "accept_eer_n30": 0.267,
+      "report_eer_n30": 0.27,
+      "status": "refit+reproduced this round; DEFAULT DISABLED (too weak alone, EER optimistic)"
+    },
+    "wearer_nearfield": {
+      "role": "NearFieldCheck peak/background energy — PRIMARY gate",
+      "status": "placeholder params; needs collar-recorded calibration (no collar audio yet)"
+    }
+  },
+  "daily_output": [
+    "counts_by_type",
+    "n_bouts(+z,direction,alarm,status)",
+    "arousal(+z,direction,status)",
+    "sentence(observation-only)"
+  ],
+  "baseline": {
+    "min_days": 14,
+    "min_bouts_rhythm": 100,
+    "min_bouts_timbre": 30,
+    "rolling_days": 14,
+    "learning_until_locked": true,
+    "detector": "CUSUM k=0.75, tail-pool calibrated, budget 1/mo /safety2"
+  },
+  "pending": [
+    "NearFieldCheck calibration on real collar audio (primary wearer gate)",
+    "enable voiceprint+nearfield together once collar audio exists",
+    "CUSUM population tail-pool at launch"
+  ],
+  "wearer_verification_runtime": "DISABLED until NearFieldCheck calibrated -> daily counts may include other dogs / TV dogs"
+}

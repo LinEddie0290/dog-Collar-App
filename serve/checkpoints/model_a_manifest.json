@@ -1,0 +1,112 @@
+{
+  "component": "Model A — event layer (server-side Python, no TFLite)",
+  "created": "2026-11-16",
+  "frontend": {
+    "backbone": "CED-tiny (mispeech/ced-tiny, rev ace276d2)",
+    "input": "16 kHz mono float32 [-1,1] (collar mic = int16 -> /32768)",
+    "pooling": "[mean, max] over encoder tokens",
+    "feature_dim": 384,
+    "hop_s": 0.25,
+    "note": "inference embedding MUST match training exactly (window/hop/pooling)"
+  },
+  "heads": {
+    "presence": {
+      "file": "model_a_v2_presence.pkl",
+      "role": "detector p(dog vocalization)",
+      "window_s": 1.0,
+      "C": 0.1,
+      "n_train": 35374,
+      "pos_rate": 0.1124,
+      "accept_onset_f1": 0.562,
+      "report_onset_f1": 0.565,
+      "status": "reused (already trained)"
+    },
+    "type7": {
+      "file": "model_a_type7_W2.pkl",
+      "role": "7-class type per detected event",
+      "labels": [
+        "breathing",
+        "coughing",
+        "dog",
+        "pant",
+        "sneezing",
+        "snoring",
+        "others"
+      ],
+      "window_s": 2.0,
+      "C": 0.1,
+      "n_train": 12009,
+      "decide": "argmax(log(softmax)+bias)",
+      "accept_onset_f1_pDog": 0.36,
+      "report_onset_f1_pDog": 0.34,
+      "status": "refit on all W2 crops this round",
+      "note": "all vocalizations (bark/growl/whine/grunt/moan) collapse to 'dog'",
+      "per_class_f1_grouped5foldOOF": {
+        "breathing": {
+          "P": 0.72,
+          "R": 0.53,
+          "F1": 0.61,
+          "n": 64
+        },
+        "coughing": {
+          "P": 0.84,
+          "R": 0.76,
+          "F1": 0.8,
+          "n": 49
+        },
+        "dog": {
+          "P": 0.76,
+          "R": 0.8,
+          "F1": 0.78,
+          "n": 3556,
+          "note": "ALL vocalizations (bark/growl/whine/grunt/moan) — NOT separated"
+        },
+        "pant": {
+          "P": 0.61,
+          "R": 0.83,
+          "F1": 0.71,
+          "n": 3926
+        },
+        "sneezing": {
+          "P": 0.44,
+          "R": 0.44,
+          "F1": 0.44,
+          "n": 124
+        },
+        "snoring": {
+          "P": 0.87,
+          "R": 0.83,
+          "F1": 0.85,
+          "n": 82
+        },
+        "others": {
+          "P": 0.86,
+          "R": 0.52,
+          "F1": 0.65,
+          "n": 4208
+        },
+        "macro7_F1": 0.69,
+        "main_confusion": "dog<->pant<->others"
+      },
+      "cannot_distinguish": "bark vs growl vs whine vs grunt vs moan (all = 'dog')"
+    }
+  },
+  "acceptance": {
+    "reproduced_from_cache": true,
+    "presence_onset_f1": 0.562,
+    "type_probe7_onset_f1": 0.36,
+    "shuffled_control_f1": 0.038,
+    "event_recall_by_type": {
+      "Bark/yelp": "48/48",
+      "Growl": "173/198",
+      "Grunt": "77/163",
+      "Moan": "30/33",
+      "Whine": "1/13"
+    }
+  },
+  "pending": [
+    "streaming serving fn (int16 -> events)",
+    "CED-tiny download for new-audio inference",
+    "Model B heads"
+  ]
+}
