@@ -16,5 +16,11 @@ cfg:
 # vocalization); the App decides how to show it. Add a mapping here ONLY for a
 # class the head truly distinguishes — e.g. uncomment `coughing: cough` etc.
 class_map: {}
+# CED-tiny weights: LOCAL ONLY, no runtime download (confidential computing).
+# Path relative to serve/. Populate at BUILD time with: python fetch_weights.py
+# sha256 of every loaded file is pinned in weights_manifest.json and verified at
+# startup; mismatch -> refuse to start.
+ced_model_dir: models/ced-tiny
+weights_manifest: weights_manifest.json
 _note: cfg tuned on full dogplay with the deployed all-data presence head; operating
   point, NOT a held-out metric. Held-out presence onset F1=0.562.

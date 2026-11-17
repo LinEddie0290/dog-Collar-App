@@ -1,0 +1,15 @@
+{
+  "ced_tiny": {
+    "repo": "mispeech/ced-tiny",
+    "revision": "ace276d2",
+    "note": "inference-relevant files (weights + configs + trust_remote_code .py). Verified at load; mismatch -> refuse start.",
+    "files": {
+      "config.json": "3a060c57c28b8138cf66bbab2c0dcab79f07c871b600f52a06f2652bf3cad2bd",
+      "configuration_ced.py": "147ac3602c1b35c3309d68575e3f19eb22cc2afe088897397991613e68a82a64",
+      "modeling_ced.py": "c8a8e8b865e4e3dcebffefb40215d6778bfa380ecea388f11806e33521a29327",
+      "feature_extraction_ced.py": "d2eff0a8cbc563196f8ccef4180d9e9299d643bfee087a545e97e9c4a9e64cb4",
+      "preprocessor_config.json": "668fbf4f00f9e3915de04fc07a621434ef1746b933662840623a9701291ca55a",
+      "model.safetensors": "0e086f0cd62814c6def89001f3f25193f75955696f6975ef6800af31d00d6dd7"
+    }
+  }
+}

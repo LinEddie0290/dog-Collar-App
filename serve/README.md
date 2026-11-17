@@ -51,10 +51,28 @@ YAMNet(`aidi_sound/`)**保留**,只继续给语义层 L2 供环境事件(门铃/
 - **arousal 注意**:唤醒头在 EmotionalCanines 上训练(acc 0.505),用到项圈/dogplay 是**域外**,会退化到 ~1.0 的先验、几乎没有判别力;只当弱的相对信号,当前数据上未验证。输出里带 `signal:"weak_relative_only"` 和 `note`。
 - **时段(几点叫)**:仅当事件时间戳是可信墙钟(项圈 RTC)时才输出。数据集录音没有可信时钟 → `time_of_day_known=False`(默认),**不输出时段描述**。
 
+## CED-tiny 权重:本地固定 + 校验,运行时不触网
+机密计算环境:**推理运行时不访问外网**,模型必须固定、可校验。
+- `embed.py` **只从本地 `config.ced_model_dir`(默认 `serve/models/ced-tiny`)加载**,`local_files_only=True`,
+  **无 HF 回退**;`weights_manifest.json` 固定每个加载文件(权重 + configs + trust_remote_code 的 .py)的 **sha256**,
+  启动时校验,**对不上就拒绝启动**。
+- **唯一触网的地方是 `fetch_weights.py`(仅 BUILD/CI 用)**:下载 pinned 权重并按 manifest 校验。
+- **部署方式(选定:打进镜像)**:git-lfs 本机不可用,故**权重不进 git**,在镜像构建阶段拉取并随镜像走;
+  运行时镜像已含固定权重、离线、可校验。Dockerfile 片段:
+  ```dockerfile
+  COPY serve/ /app/serve/
+  # 构建期(有网)拉权重进镜像;运行期(机密计算)离线
+  RUN HF_ENDPOINT=https://hf-mirror.com python /app/serve/fetch_weights.py --dest /app/serve/models/ced-tiny
+  # 运行期可加 ENV TRANSFORMERS_OFFLINE=1 HF_HUB_OFFLINE=1（embed.py 也已强制）
+  ```
+  (若将来启用 git-lfs,可改为用 LFS 把 `serve/models/ced-tiny` 跟 serve/ 一起提交,manifest 校验逻辑不变。)
+- 重新 pin(仅在有意换模型/版本时):`python fetch_weights.py --dest <trusted_dir> --write-manifest`。
+
 ## 产物
 - `serve/embed.py`(CED 嵌入,与训练逐位一致,可替换成 ONNX/TFLite 导出)/ `model_a.py` / `model_b.py` / `config.yaml`
+- `serve/fetch_weights.py`(build 期拉权重)/ `serve/weights_manifest.json`(sha256 pin)
 - `checkpoints/`:`model_a_v2_presence.pkl`、`model_a_type7_W2.pkl`、`model_b_arousal.pkl`、`model_b_wearer_voiceprint.pkl`(纯 numpy,不锁 sklearn)+ `model_a_manifest.json` / `model_b_manifest.json`
-- 权重:`models_ext/ced-tiny`(HF `mispeech/ced-tiny` rev ace276d2;直连不通用 `HF_ENDPOINT=https://hf-mirror.com`)—— 大文件,不进 git
+- `serve/models/ced-tiny`:权重目录,**不进 git**,构建期由 `fetch_weights.py` 填充
 
 ## 多天样例说明
 README/交付里出现的"多天 learning→monitoring→alarm"是**注入上升的模拟**(用真实事件池按天采样),

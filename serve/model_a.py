@@ -101,7 +101,15 @@ DEFAULTS = {
     # (all vocalizations = generic `dog`), so we never fill the bark/growl slots.
     # Unmapped classes are emitted with app_slot=None + their real `class`.
     "class_map": {},
+    # CED-tiny weights: local only (no runtime download). Relative paths resolve
+    # against serve/. Populate the dir at BUILD time via serve/fetch_weights.py.
+    "ced_model_dir": "models/ced-tiny",
+    "weights_manifest": "weights_manifest.json",
 }
+
+
+def _resolve(p):
+    return p if os.path.isabs(p) else os.path.join(HERE, p)
 
 
 class ModelA:
@@ -113,7 +121,8 @@ class ModelA:
         self.bias = np.array([self.type7["biases_recommended"][l] for l in self.labels])
         if embedder is None:
             from embed import CEDEmbedder
-            embedder = CEDEmbedder()
+            embedder = CEDEmbedder(model_dir=_resolve(self.cfg["ced_model_dir"]),
+                                   weights_manifest=_resolve(self.cfg["weights_manifest"]))
         self.emb = embedder
 
     def detect(self, pcm, sr=16000):

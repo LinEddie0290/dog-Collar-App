@@ -13,9 +13,42 @@ heads or the streaming logic.
 from __future__ import annotations
 
 import os
+import json
+import hashlib
 import numpy as np
 
 TARGET_SR = 16000
+HERE = os.path.dirname(os.path.abspath(__file__))
+
+
+def _sha256(path: str) -> str:
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for b in iter(lambda: f.read(1 << 20), b""):
+            h.update(b)
+    return h.hexdigest()
+
+
+def verify_weights(model_dir: str, manifest_path: str) -> None:
+    """Refuse to start unless every pinned file is present and its sha256 matches.
+    Runtime does NOT touch the network (confidential-computing requirement):
+    weights are baked into the deploy image/package by fetch_weights.py at build.
+    """
+    if not os.path.isdir(model_dir):
+        raise RuntimeError(f"CED weights dir not found: {model_dir}\n"
+                           f"Populate it at BUILD time with serve/fetch_weights.py (no runtime download).")
+    man = json.load(open(manifest_path))["ced_tiny"]["files"]
+    bad = []
+    for name, want in man.items():
+        p = os.path.join(model_dir, name)
+        if not os.path.isfile(p):
+            bad.append(f"missing {name}")
+        else:
+            got = _sha256(p)
+            if got != want:
+                bad.append(f"sha256 mismatch {name}: got {got[:12]}.. want {want[:12]}..")
+    if bad:
+        raise RuntimeError("CED weight verification FAILED (refusing to start):\n  " + "\n  ".join(bad))
 
 
 def to_float_mono_16k(pcm, sr: int) -> np.ndarray:
@@ -52,20 +85,23 @@ class CEDEmbedder:
 
     dim = 384
 
-    def __init__(self, model_dir: str | None = None):
-        os.environ.setdefault("HF_ENDPOINT", "https://hf-mirror.com")
-        os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
+    def __init__(self, model_dir: str, weights_manifest: str | None = None):
+        """model_dir: local path to the CED-tiny weights (REQUIRED). No HF fallback:
+        runtime never downloads. weights_manifest pins sha256 of every file loaded;
+        verified before use, mismatch -> refuse to start."""
+        # hard-offline: transformers must not reach out even if code changes
+        os.environ["TRANSFORMERS_OFFLINE"] = "1"
+        os.environ["HF_HUB_OFFLINE"] = "1"
+        if not model_dir:
+            raise ValueError("CEDEmbedder requires an explicit local model_dir (no HF fallback).")
+        manifest = weights_manifest or os.path.join(HERE, "weights_manifest.json")
+        verify_weights(model_dir, manifest)
         import torch
         from transformers import AutoFeatureExtractor, AutoModelForAudioClassification
-        root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        local = os.path.join(root, "models_ext", "ced-tiny")
-        # local weights if present (dev), else the HF id so from_pretrained fetches
-        # (rev pinned; set HF_ENDPOINT=https://hf-mirror.com if the direct Hub is blocked)
-        p = model_dir or (local if os.path.isdir(local) else "mispeech/ced-tiny")
-        rev = None if os.path.isdir(p) else "ace276d2"
         self._torch = torch
-        self.fe = AutoFeatureExtractor.from_pretrained(p, trust_remote_code=True, revision=rev)
-        self.enc = AutoModelForAudioClassification.from_pretrained(p, trust_remote_code=True, revision=rev).eval().encoder
+        self.fe = AutoFeatureExtractor.from_pretrained(model_dir, trust_remote_code=True, local_files_only=True)
+        self.enc = AutoModelForAudioClassification.from_pretrained(
+            model_dir, trust_remote_code=True, local_files_only=True).eval().encoder
         torch.set_num_threads(min(8, os.cpu_count() or 1))
 
     def embed_window(self, w: np.ndarray) -> np.ndarray:
