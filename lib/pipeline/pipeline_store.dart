@@ -21,6 +21,7 @@ import '../data/emergency_watch.dart';
 import '../data/gps_track.dart';
 import '../data/safe_zone.dart';
 import '../data/temp_judge.dart';
+import '../sound/sound_events.dart';
 import 'imu_input.dart';
 import 'pipeline_runner.dart';
 
@@ -39,6 +40,9 @@ class StoredSession {
 
   /// T12：位置（gps の行。HDOP は acc_m ÷ 5）。
   final List<GpsPoint> gps = <GpsPoint>[];
+
+  /// T43：犬の声（爱迪の YAMNet）。時刻は UTC ミリ秒。
+  final List<({int tMs, int endMs, String cls, double prob})> sounds = <({int tMs, int endMs, String cls, double prob})>[];
 }
 
 class PipelineStore {
@@ -124,6 +128,16 @@ class PipelineStore {
         if (f.source.isNotEmpty) 'src': f.source,
       });
 
+  /// T43：犬の声 1 回（[baseMs]＝音の始まりの UTC ミリ秒）。
+  Future<void> appendSound(String id, SoundEvent e, int baseMs, {String source = ''}) => _append(id, <String, Object?>{
+        'rec': 'sound',
+        't_ms': baseMs + e.startMs,
+        'end_ms': baseMs + e.endMs,
+        'class': e.cls,
+        'prob': double.parse(e.prob.toStringAsFixed(3)),
+        if (source.isNotEmpty) 'src': source,
+      });
+
   /// T11：首輪の温度（物体＝皮膚・環境）。
   Future<void> appendTemp(String id, TempReading r) => _append(id, <String, Object?>{
         'rec': 'temp',
@@ -206,6 +220,13 @@ List<StoredSession> loadSessionsFrom(String dirPath) {
           final int i = s.truth.lastIndexWhere(
               (TruthMark x) => x.tDevUs == (m['t_us'] as num).toInt() && x.label == m['label'] && x.source == 'button');
           if (i >= 0) s.truth.removeAt(i);
+        case 'sound':
+          s.sounds.add((
+            tMs: (m['t_ms'] as num).toInt(),
+            endMs: (m['end_ms'] as num).toInt(),
+            cls: m['class'] as String,
+            prob: (m['prob'] as num).toDouble(),
+          ));
         case 'temp':
           final num? o = m['obj_c'] as num?, a = m['amb_c'] as num?;
           if (o != null && a != null) {

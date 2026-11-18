@@ -119,7 +119,19 @@ HomeSnapshot buildHomeSnapshot(
             alert: a == null ? null : t.alert(a),
           );
         }(),
-      demoBubble(date, Board.mind),
+      // T43：心理は吠叫の回数（爱迪の YAMNet、试用）
+      if (demoAll)
+        demoBubble(date, Board.mind)
+      else
+        () {
+          final double? n = rawToday?['sound_bark'];
+          return BubbleData(
+            board: Board.mind,
+            value: n == null ? noDataValue : '吠叫 ${n.round()} 次',
+            demo: false,
+            trial: true,
+          );
+        }(),
       demoBubble(date, Board.diet),
     ],
   );

@@ -93,7 +93,7 @@ void main() {
     expect(shortDate('2026-11-05'), '11/05');
   });
 
-  testWidgets('25 項目すべて：板块のカード → 板块のページ → 項目のページが開ける', (WidgetTester tester) async {
+  testWidgets('27 項目すべて（T43 で嚎叫・呜咽を足した）：板块のカード → 板块のページ → 項目のページが開ける', (WidgetTester tester) async {
     _tall(tester);
     await tester.pumpWidget(const MaterialApp(home: Scaffold(body: HealthPage(clock: _clock))));
     await tester.pumpAndSettle();
@@ -116,7 +116,7 @@ void main() {
       await tester.pageBack();
       await tester.pumpAndSettle();
     }
-    expect(opened, 25);
+    expect(opened, 27);
     expect(tester.takeException(), isNull);
   });
 

@@ -93,7 +93,7 @@ class _HealthPageState extends State<HealthPage> {
                   const Text('健康', style: TextStyle(fontSize: 24, fontWeight: FontWeight.w700, color: WaterColors.text)),
                   const SizedBox(width: 10),
                   const Expanded(
-                    child: Text('六大板块・25 个项目', style: TextStyle(fontSize: 12, color: WaterColors.sub)),
+                    child: Text('六大板块・27 个项目', style: TextStyle(fontSize: 12, color: WaterColors.sub)),
                   ),
                   GestureDetector(
                     key: const ValueKey<String>('health-demo-toggle'),

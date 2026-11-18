@@ -1,6 +1,7 @@
 /// T35：六大板块（《犬类健康・六类综合金字塔》）と、その中の項目の一覧。
 ///
 /// 項目は「功能完成度表_2026-11-04」と同じ。心理の吠叫・低吼は爱迪の声のモジュール（金字塔にある）。
+/// T43（D-065）：心理に嚎叫・呜咽を足した（27 項目）。声の 4 つは爱迪の YAMNet で本物（试用）。
 /// [HealthItem.real] は「今のアプリで本物のデータが出る」もの。それ以外は示例（偽のデータ）で出す（D-051 D2）。
 /// 挠・持续舔舐・发抖は CNN v2（T35）で本物になったが、模擬で学んだクラスなので [HealthItem.trial]（试用）。
 /// 文言は中国語だけ（D-051 D6）。
@@ -62,8 +63,10 @@ const List<BoardInfo> boardInfos = <BoardInfo>[
     HealthItem('rub', '蹭擦'),
   ]),
   BoardInfo(Board.mind, '心理', 'bark', <HealthItem>[
-    HealthItem('bark', '吠叫'),
-    HealthItem('growl', '低吼'),
+    HealthItem('bark', '吠叫', real: true, trial: true),
+    HealthItem('growl', '低吼', real: true, trial: true),
+    HealthItem('howl', '嚎叫', real: true, trial: true),
+    HealthItem('whine', '呜咽', real: true, trial: true),
     HealthItem('pacing', '来回走动（分离焦虑）'),
   ]),
   BoardInfo(Board.diet, '饮食', 'drink', <HealthItem>[
