@@ -9,6 +9,7 @@ import '../pipeline/pipeline_runner.dart';
 import '../pipeline/truth_compare.dart';
 import '../state/continuous_monitor.dart';
 import 'app_colors.dart';
+import 'sound_test_card.dart';
 import 'test_page_sessions.dart';
 import 'test_page_vitals.dart';
 
@@ -149,6 +150,8 @@ class _TestPageState extends State<TestPage> {
             if (s != null && _dir != null) _fileLine('$_dir/${s.id}.jsonl'),
             if (s != null && _dir != null) '生的 IMU：${_fileLine('$_dir/${s.id}.imu.csv')}',
           ]),
+          // T43：声のテスト（wav → YAMNet）
+          SoundTestCard(runner: r),
           SessionsCard(runner: r, share: widget.share, exportDir: widget.exportDir),
         ],
       ),

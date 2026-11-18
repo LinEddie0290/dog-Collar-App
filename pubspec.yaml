@@ -68,6 +68,7 @@ dependencies:
   # ボタン1つで完結させたい波形画像はこちらを使う。
   gal: ^2.3.3
   flutter_local_notifications: ^23.0.2
+  tflite_flutter: ^0.12.1
 
 dev_dependencies:
   flutter_test:
@@ -101,6 +102,9 @@ flutter:
     - assets/demo/dog_sim01/summary/
     # T24：CNN の重みと確かめ用の窓（設定 → 推理速度）
     - assets/models/
+    # T43：爱迪の声の検出（YAMNet の公式 TFLite と、声のテストの wav）
+    - aidi_sound/model/yamnet.tflite
+    - aidi_sound/test/test_input.wav
 
   # To add assets to your application, add an assets section, like this:
   # assets:

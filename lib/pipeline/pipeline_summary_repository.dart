@@ -58,7 +58,9 @@ String buildSummaryData(String dirPath, String dogId, String generatedAt,
   final List<VitalReading> vitals = <VitalReading>[];
   final List<TempReading> temps = <TempReading>[];
   final List<GpsPoint> gps = <GpsPoint>[];
+  final List<({int tMs, int endMs, String cls, double prob})> sounds = <({int tMs, int endMs, String cls, double prob})>[];
   for (final StoredSession s in sessions) {
+    sounds.addAll(s.sounds);
     temps.addAll(s.temps);
     gps.addAll(s.gps);
     final EventsSnapshot snap = computeEvents(s.windows, s.vitals, cfg: cfg, ecfg: ecfg);
@@ -90,6 +92,12 @@ String buildSummaryData(String dirPath, String dogId, String generatedAt,
     raw[d]?['outdoor_m'] = v.outdoorM;
     raw[d]?['outdoor_min'] = v.outdoorMin;
   });
+  // T43：声の種類ごとの回数（sound_bark など）。声の記録がない日は入れない（「没有数据」のまま）
+  for (final ({int tMs, int endMs, String cls, double prob}) x in sounds) {
+    final Map<String, double>? m = raw[localDateOf(x.tMs, tzOffsetHours: dcfg.tzOffsetHours)];
+    if (m == null) continue;
+    m['sound_${x.cls}'] = (m['sound_${x.cls}'] ?? 0) + 1;
+  }
   for (final BehaviorEvent e in events) {
     if (e.tStartMs < 0) continue;
     final String d = dateKey(DateTime.fromMillisecondsSinceEpoch(e.tStartMs, isUtc: true)

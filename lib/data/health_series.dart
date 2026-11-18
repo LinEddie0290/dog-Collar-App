@@ -226,6 +226,9 @@ ItemSeries buildItemSeries(String itemId, {required String today, SummaryBundle?
         return raw[d]?['lick_min'];
       case 'tremble':
         return raw[d]?['shake_count'];
+      // T43：声の回数（爱迪の YAMNet）。声の記録がない日は null
+      case 'bark' || 'growl' || 'howl' || 'whine':
+        return raw[d]?['sound_$itemId'];
       // T11：皮膚の温度の 1 日の値（安定した 1 分の中央値）
       case 'temp':
         return raw[d]?['temp_c'];
