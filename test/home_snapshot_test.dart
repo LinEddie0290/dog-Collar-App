@@ -43,21 +43,22 @@ WindowState _st(int i, {required bool rest, double stillS = 0}) => WindowState(
 
 void main() {
   group('六大板块の一覧', () {
-    test('Board の順と同じ・項目の id は重ならない・本物は运动・睡眠・生理・皮肤（试用は挠・舔・发抖・体温）', () {
+    test('Board の順と同じ・項目の id は重ならない・本物は运动・睡眠・生理・皮肤・心理（试用は挠・舔・发抖・体温・声の 4 つ）', () {
       expect(boardInfos.map((BoardInfo b) => b.board).toList(), Board.values);
       expect(boardInfos.map((BoardInfo b) => b.name).toList(), <String>['运动', '睡眠', '生理', '皮肤', '心理', '饮食']);
       final List<String> ids = <String>[for (final BoardInfo b in boardInfos) ...b.items.map((HealthItem i) => i.id)];
       expect(ids.toSet().length, ids.length);
-      expect(ids.length, 25); // 完成度表の 23 項目＋吠叫・低吼
+      expect(ids.length, 27); // 完成度表の 23 項目＋吠叫・低吼＋嚎叫・呜咽（T43）
       for (final BoardInfo b in boardInfos) {
         expect(b.items, isNotEmpty);
         final bool anyReal = b.items.any((HealthItem i) => i.real);
-        expect(anyReal, <Board>[Board.exercise, Board.sleep, Board.physio, Board.skin].contains(b.board), reason: b.name);
+        expect(anyReal, <Board>[Board.exercise, Board.sleep, Board.physio, Board.skin, Board.mind].contains(b.board),
+            reason: b.name);
       }
       final Set<String> trial = <String>{
         for (final BoardInfo b in boardInfos) ...b.items.where((HealthItem i) => i.trial).map((HealthItem i) => i.id),
       };
-      expect(trial, <String>{'scratch', 'lick', 'tremble', 'temp'}); // T11：体温（皮膚の温度、平時との差）
+      expect(trial, <String>{'scratch', 'lick', 'tremble', 'temp', 'bark', 'growl', 'howl', 'whine'}); // T11 体温・T43 声
       for (final BoardInfo b in boardInfos) {
         for (final HealthItem i in b.items.where((HealthItem i) => i.trial)) {
           expect(i.real, isTrue, reason: i.id); // 试用は本物の中だけ
@@ -67,10 +68,10 @@ void main() {
   });
 
   group('泡', () {
-    test('本物のまとめ：运动・睡眠・生理・皮肤（试用）は本物の値、心理・饮食は示例', () {
+    test('本物のまとめ：运动・睡眠・生理・皮肤・心理（试用）は本物の値、饮食は示例', () {
       final HomeSnapshot s = buildHomeSnapshot(
         date: '2026-11-05',
-        rawToday: <String, double>{'wear_min': 300, 'scratch_count': 7, 'lick_min': 2.5},
+        rawToday: <String, double>{'wear_min': 300, 'scratch_count': 7, 'lick_min': 2.5, 'sound_bark': 3},
         real: _summary(
           exerciseDaily: _item('exercise.daily', <String, dynamic>{'active_min': 42.4}),
           exerciseAlert: _item('exercise.alert.less', <String, dynamic>{'ratio': 0.4}),
@@ -83,12 +84,12 @@ void main() {
       expect(s.bubble(Board.exercise).value, '42 分钟');
       expect(s.bubble(Board.sleep).value, '9.5 小时');
       expect(s.bubble(Board.physio).value, '心率 82');
-      for (final Board b in <Board>[Board.exercise, Board.sleep, Board.physio, Board.skin]) {
+      for (final Board b in <Board>[Board.exercise, Board.sleep, Board.physio, Board.skin, Board.mind]) {
         expect(s.bubble(b).demo, isFalse, reason: b.name);
       }
-      for (final Board b in <Board>[Board.mind, Board.diet]) {
-        expect(s.bubble(b).demo, isTrue, reason: b.name);
-      }
+      expect(s.bubble(Board.diet).demo, isTrue);
+      expect(s.bubble(Board.mind).value, '吠叫 3 次');
+      expect(s.bubble(Board.mind).trial, isTrue);
       expect(s.bubble(Board.skin).value, '挠 7 次');
       expect(s.bubble(Board.skin).trial, isTrue);
       expect(s.bubble(Board.exercise).trial, isFalse);

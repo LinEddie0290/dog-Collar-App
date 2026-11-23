@@ -21,6 +21,7 @@ import 'package:flutter/foundation.dart';
 
 import '../data/emergency_watch.dart';
 import '../data/temp_judge.dart';
+import '../sound/sound_events.dart';
 import '../data/safe_zone.dart';
 import 'auto_vitals.dart';
 import 'cnn_models.dart';
@@ -372,6 +373,15 @@ class PipelineRunner extends ChangeNotifier {
     final PipelineSession? s = _session;
     if (s == null) return;
     unawaited(store?.appendEmergency(s.id, h));
+  }
+
+  /// T43：犬の声を記録ファイルへ（記録中だけ）。[baseMs]＝音の始まりの UTC ミリ秒。
+  void addSounds(List<SoundEvent> events, int baseMs, {String source = ''}) {
+    final PipelineSession? s = _session;
+    if (s == null) return;
+    for (final SoundEvent e in events) {
+      unawaited(store?.appendSound(s.id, e, baseMs, source: source));
+    }
   }
 
   /// T11：首輪の温度を記録ファイルへ（記録中だけ）。
