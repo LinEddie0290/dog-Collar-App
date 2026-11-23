@@ -1,0 +1,14 @@
+name: collar_ecg_bp
+description: >
+  T44 (D-066): ECG / blood-pressure input conversion for 汪磊老师组's models, ported from
+  collar-pipeline (collar/ecg, collar/bp and the original VMD/spline code). Same numbers as
+  the Python version (checked by the golden file in the app's test/fixtures/ecg_bp_golden.json).
+version: 0.1.0
+publish_to: none
+
+environment:
+  sdk: ">=3.0.0 <4.0.0"
+
+dependencies:
+  collar_pipeline:
+    path: ../collar_pipeline

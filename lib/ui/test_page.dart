@@ -9,6 +9,7 @@ import '../pipeline/pipeline_runner.dart';
 import '../pipeline/truth_compare.dart';
 import '../state/continuous_monitor.dart';
 import 'app_colors.dart';
+import 'ecg_bp_test_card.dart';
 import 'sound_test_card.dart';
 import 'test_page_sessions.dart';
 import 'test_page_vitals.dart';
@@ -152,6 +153,8 @@ class _TestPageState extends State<TestPage> {
           ]),
           // T43：声のテスト（wav → YAMNet）
           SoundTestCard(runner: r),
+          // T44：心電図・血圧のテスト（にせの信号 → 汪磊先生のグループのモデル）
+          const EcgBpTestCard(),
           SessionsCard(runner: r, share: widget.share, exportDir: widget.exportDir),
         ],
       ),

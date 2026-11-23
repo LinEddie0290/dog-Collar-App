@@ -1,0 +1,184 @@
+{
+ "made": "2026-11-23",
+ "models": {
+  "ecg_bilstm.tflite": {
+   "kind": "ecg",
+   "input": [
+    1,
+    1,
+    1024
+   ],
+   "output": [
+    1,
+    1,
+    1024
+   ],
+   "quant": "fp32",
+   "weights": "model_5.pth",
+   "sha": "51e6759786a75c6f",
+   "convert_s": 717,
+   "max_abs_diff": 0.00035196542739868164,
+   "min_corr": 0.9999999544891901
+  },
+  "bp_sbp_f1.tflite": {
+   "kind": "sbp",
+   "fold": 1,
+   "input": [
+    1,
+    3,
+    900
+   ],
+   "output": [
+    1,
+    1
+   ],
+   "quant": "int8 (weight only, DEQUANTIZE; buffers inline for TFLite 2.12 on iOS)",
+   "sha": "a7600dcb996dcabc",
+   "min_corr": null
+  },
+  "bp_sbp_f2.tflite": {
+   "kind": "sbp",
+   "fold": 2,
+   "input": [
+    1,
+    3,
+    900
+   ],
+   "output": [
+    1,
+    1
+   ],
+   "quant": "int8 (weight only, DEQUANTIZE; buffers inline for TFLite 2.12 on iOS)",
+   "sha": "f3f45f95a2fcd959",
+   "min_corr": null
+  },
+  "bp_sbp_f3.tflite": {
+   "kind": "sbp",
+   "fold": 3,
+   "input": [
+    1,
+    3,
+    900
+   ],
+   "output": [
+    1,
+    1
+   ],
+   "quant": "int8 (weight only, DEQUANTIZE; buffers inline for TFLite 2.12 on iOS)",
+   "sha": "42a8d35d7a41d0a8",
+   "min_corr": null
+  },
+  "bp_sbp_f4.tflite": {
+   "kind": "sbp",
+   "fold": 4,
+   "input": [
+    1,
+    3,
+    900
+   ],
+   "output": [
+    1,
+    1
+   ],
+   "quant": "int8 (weight only, DEQUANTIZE; buffers inline for TFLite 2.12 on iOS)",
+   "sha": "6697ad0fa7b4f7d7",
+   "min_corr": null
+  },
+  "bp_sbp_f5.tflite": {
+   "kind": "sbp",
+   "fold": 5,
+   "input": [
+    1,
+    3,
+    900
+   ],
+   "output": [
+    1,
+    1
+   ],
+   "quant": "int8 (weight only, DEQUANTIZE; buffers inline for TFLite 2.12 on iOS)",
+   "sha": "201b84b12d4a4fc4",
+   "min_corr": null
+  },
+  "bp_dbp_f1.tflite": {
+   "kind": "dbp",
+   "fold": 1,
+   "input": [
+    1,
+    3,
+    900
+   ],
+   "output": [
+    1,
+    1
+   ],
+   "quant": "int8 (weight only, DEQUANTIZE; buffers inline for TFLite 2.12 on iOS)",
+   "sha": "e4d1a9af2cbc77d6",
+   "min_corr": null
+  },
+  "bp_dbp_f2.tflite": {
+   "kind": "dbp",
+   "fold": 2,
+   "input": [
+    1,
+    3,
+    900
+   ],
+   "output": [
+    1,
+    1
+   ],
+   "quant": "int8 (weight only, DEQUANTIZE; buffers inline for TFLite 2.12 on iOS)",
+   "sha": "962c9c2ec1d22a32",
+   "min_corr": null
+  },
+  "bp_dbp_f3.tflite": {
+   "kind": "dbp",
+   "fold": 3,
+   "input": [
+    1,
+    3,
+    900
+   ],
+   "output": [
+    1,
+    1
+   ],
+   "quant": "int8 (weight only, DEQUANTIZE; buffers inline for TFLite 2.12 on iOS)",
+   "sha": "2f7b27929658eac9",
+   "min_corr": null
+  },
+  "bp_dbp_f4.tflite": {
+   "kind": "dbp",
+   "fold": 4,
+   "input": [
+    1,
+    3,
+    900
+   ],
+   "output": [
+    1,
+    1
+   ],
+   "quant": "int8 (weight only, DEQUANTIZE; buffers inline for TFLite 2.12 on iOS)",
+   "sha": "b175a736f53a4781",
+   "min_corr": null
+  },
+  "bp_dbp_f5.tflite": {
+   "kind": "dbp",
+   "fold": 5,
+   "input": [
+    1,
+    3,
+    900
+   ],
+   "output": [
+    1,
+    1
+   ],
+   "quant": "int8 (weight only, DEQUANTIZE; buffers inline for TFLite 2.12 on iOS)",
+   "sha": "5268160b4148052a",
+   "min_corr": null
+  }
+ }
+}

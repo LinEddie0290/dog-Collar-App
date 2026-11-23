@@ -48,6 +48,9 @@ dependencies:
   # T34-A：collar-pipeline（Python）の前処理・状態判断などを Dart に移したもの。
   collar_pipeline:
     path: packages/collar_pipeline
+  # T44（D-066）：心電図・血圧の前処理（VMD・スプライン・R 波など、純 Dart）。モデルは assets/models/。
+  collar_ecg_bp:
+    path: packages/collar_ecg_bp
   amap_map: ^1.0.15
   # amap_map の土台。LatLng / AMapApiKey などを直接 import しているので、
   # 推移的依存に頼らず明示的に書いておく(depend_on_referenced_packages 対策)。
