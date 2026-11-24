@@ -1,0 +1,90 @@
+{
+  "_comment": "CED-tiny (mispeech/ced-tiny rev ace276d2) front-end, read from source NOT memory. Sources: models/ced-tiny/feature_extraction_ced.py (CedFeatureExtractor), preprocessor_config.json, config.json, and runtime introspection of torchaudio 2.4.1 MelSpectrogram/AmplitudeToDB. This is the standard the collar C log-mel must match.",
+  "produced": "2026-11-18",
+  "sample_rate": 16000,
+  "input": "float32 mono PCM in [-1,1] (collar int16 / 32768.0). Model inference unit = a W-second window (presence 1.0s, type 2.0s), cropped with zero-pad past edges (serve/embed.py::crop) BEFORE the front-end.",
+
+  "mel_spectrogram": {
+    "impl": "torchaudio.transforms.MelSpectrogram (defaults not overridden are pinned below by introspection)",
+    "n_fft": 512,
+    "win_length": 512,
+    "hop_length": 160,
+    "window": "hann, periodic=True (torch.hann_window(512, periodic=True); sum=256.0; NOT symmetric)",
+    "center": true,
+    "pad_mode": "reflect",
+    "pad": 0,
+    "power": 2.0,
+    "normalized": false,
+    "onesided": true,
+    "n_freq_bins": 257,
+    "n_mels": 64,
+    "f_min": 0,
+    "f_max": 8000.0,
+    "mel_scale": "htk",
+    "mel_norm": null,
+    "mel_fb_note": "filterbank [257,64], NOT slaney-normalized (per-filter column sum ~=3.9, not 1.0). fb computed by torchaudio.functional.melscale_fbanks(htk, norm=None)."
+  },
+
+  "amplitude_to_db": {
+    "impl": "torchaudio.transforms.AmplitudeToDB(top_db=120)",
+    "stype": "power",
+    "multiplier": 10.0,
+    "amin": 1e-10,
+    "ref_value": 1.0,
+    "db_multiplier": 0.0,
+    "top_db": 120,
+    "formula_per_frame": "x_db = 10.0 * log10(max(mel_power, 1e-10))  (ref removed: - 10*log10(max(amin,ref)) = -0)",
+    "formula_clamp": "x_db = max(x_db, x_db.max() - 120.0)   <-- x_db.max() is over the WHOLE W-second window"
+  },
+
+  "operations_after_log_before_patch_embed": [
+    {"step": "top_db clamp", "where": "end of feature extractor (AmplitudeToDB)", "frame_local": false, "note": "needs window-global max; see whole_segment_dependent"},
+    {"step": "unsqueeze+permute to [B,n_mels,1,T]", "where": "modeling_ced.py CedModel.forward L421-423", "frame_local": true},
+    {"step": "init_bn = BatchNorm2d(64, momentum=0.01)", "where": "CedModel.forward L424", "frame_local": true, "note": "model is in .eval() -> uses FIXED running_mean/running_var buffers, NOT per-segment stats. Per-frame safe. Ship the running stats to C or keep server-side."},
+    {"step": "split into target_length=1012-frame chunks + pad_last", "where": "CedModel.forward L427-440", "frame_local": true, "note": "deterministic given T; a 1s/2s window (T<=~201 frames) is < 1012 so n_splits=1, no split."},
+    {"step": "patch_embed Conv2d(1->192, kernel=16, stride=16)", "where": "forward_features L400 / CedAudioPatchEmbed L109", "frame_local": true, "note": "ENCODER starts here (patch embedding)."},
+    {"step": "+ time_pos_embed[:, :, :, :t] + freq_pos_embed", "where": "forward_features L402-403", "frame_local": true},
+    {"step": "flatten+permute, transformer blocks x12, final norm", "where": "forward_features L406-414", "frame_local": true},
+    {"step": "[mean,max] token pooling -> 384d", "where": "serve/embed.py::embed_window (NOT model forward_head)", "frame_local": true}
+  ],
+
+  "encoder_boundary": {
+    "front_end_output": "log-mel [B, 64, T] after AmplitudeToDB (feature_extraction_ced.py::__call__ returns BatchFeature input_values)",
+    "encoder_entry": "modeling_ced.py CedModel.forward, line 421 (x = torch.unsqueeze(input_values, 1)). init_bn + patch_embed are inside the encoder.",
+    "patch_embed_line": "modeling_ced.py line 400 / 109"
+  },
+
+  "whole_segment_dependent": [
+    {
+      "op": "AmplitudeToDB top_db=120 clamp",
+      "why": "clamp min = x_db.max() - 120, max taken over the entire W-second window (in serve/embed.py the feature extractor is called per inference window, so max is per-window, NOT per whole session).",
+      "collar_can_compute_per_frame": false,
+      "handling": "collar uploads PRE-top_db log-mel = 10*log10(max(mel_power,1e-10)) per frame; server reconstructs the W-second window (it already does the windowing) and applies the top_db window clamp inside encode_from_logmel before the encoder. (Alternatively verify top_db is inactive for the signal range and drop it — to be decided in Step 1/2, not assumed here.)"
+    },
+    {
+      "op": "center=True reflect padding at WINDOW edges",
+      "why": "The current waveform path runs the front-end on each W-second window INDEPENDENTLY (serve/embed.py::crop then fe per window). With center=True the STFT reflect-pads n_fft//2=256 samples at each window edge, so the first ~2 and last ~2 frames of every window are built from MIRRORED audio. A continuous per-frame collar computes those same frame positions from REAL neighbouring audio -> the edge frames differ between the two paths.",
+      "collar_can_compute_per_frame": false,
+      "handling": "ref_logmel.py STREAM mode frames the WHOLE recording continuously (frame k centered at sample k*160), reflect-padding only at the recording's absolute start/end; the server then slices by frame index into the same W-second encoding windows. So the collar never reflect-pads at window boundaries; only the single recording-start boundary is padded (padding rule is an explicit ref_logmel parameter). Interior window edges therefore use real audio, unlike the HF per-window path. Step 2 must quantify the edge-frame delta (first/last ~2 frames) and its effect on the embedding.",
+      "frame_radius_affected": "n_fft//2 / hop_length = 256/160 ~= 1.6 -> first/last 2 frames per window"
+    }
+  ],
+
+  "pcm_scaling": {
+    "int16_to_float": "x_float = x_int16.astype(float32) / 32768.0  (serve/embed.py::to_float_mono_16k; divide by 32768, NOT 32767)",
+    "mono": "multi-channel averaged to mono before scaling",
+    "resample": "if sr != 16000, scipy.signal.resample_poly to 16k (collar is native 16k, so no resample on device)"
+  },
+  "pre_frontend_processing": {
+    "pre_emphasis": "NONE (no pre-emphasis filter anywhere in embed.py or feature_extraction_ced.py)",
+    "dc_removal": "NONE (no DC/mean subtraction before the STFT)",
+    "dither": "NONE",
+    "note": "the only thing before MelSpectrogram is int16/32768 scaling + mono + (optional) resample. Confirmed by reading serve/embed.py and feature_extraction_ced.py."
+  },
+
+  "placement_conclusion": {
+    "on_collar_pure_per_frame": ["reflect-pad+framing (win 512/hop 160/hann periodic)", "power spectrogram |rFFT|^2 (257 bins)", "mel filterbank 257->64 (htk, norm=None, fmin0 fmax8000)", "10*log10(max(.,1e-10))"],
+    "must_be_server_side": ["top_db=120 window-max clamp (window-global)", "init_bn + split/pad + patch_embed + transformer (the encoder itself)"],
+    "note": "init_bn in eval mode is per-frame safe (fixed buffers) but lives inside the encoder, so it stays server-side anyway. The ONLY front-end op the collar cannot do per-frame is the top_db window clamp."
+  }
+}
