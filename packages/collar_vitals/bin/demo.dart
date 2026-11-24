@@ -15,10 +15,10 @@
 ///
 ///   2. **A real capture, if you pass one.** Give it the path to an
 ///      `onboard_imu.csv` produced by `./scripts/pet view` and it will run the
-///      real thing. The 2026-09-12 chest recordings should come out at
-///      78 bpm — that figure was established independently in SciPy with a
-///      Hilbert envelope and template matching, so it is a genuine
-///      cross-check, not this code agreeing with itself.
+///      real thing. The 2026-09-12 chest recordings are compared, per
+///      capture, with collar-pipeline (T09), which computes the same thing in
+///      Python with the sample rate taken as count ÷ time (417 Hz). The old
+///      single 78 bpm SciPy figure was itself derived at 401 Hz (T22).
 ///
 /// ```sh
 /// dart run bin/demo.dart
@@ -173,6 +173,18 @@ void runSynthetic() {
   check('拍を数えた心拍も 78 bpm 付近になる',
       rb.beatRateBpm != null && (rb.beatRateBpm! - 78).abs() <= 8,
       '${rb.beatRateBpm?.toStringAsFixed(1)}');
+  // 格下げの条件を書き間違えると good が一切出なくなる(2026-09-13)。
+  // 「食い違っていないなら格下げしない」を明示的に押さえる。
+  final VitalsResult rg = analyzer.analyze(
+      synthesise(bpm: 100, seconds: 60, sampleRateHz: 104),
+      sampleRateHz: 104);
+  check('食い違っていない測定は good のまま（不要な格下げをしない）',
+      rg.quality == VitalsQuality.good && !rg.rateDisagrees,
+      '${rg.quality.name} / 信頼度 '
+      '${rg.heartRateConfidence.toStringAsFixed(2)} / '
+      '自己相関 ${rg.heartRateBpm?.toStringAsFixed(1)} / '
+      '拍 ${rg.beatRateBpm?.toStringAsFixed(1)}');
+
   check('素直な信号では食い違い警告を出さない', !rb.rateDisagrees,
       '自己相関 ${rb.heartRateBpm?.toStringAsFixed(1)} / '
       '拍 ${rb.beatRateBpm?.toStringAsFixed(1)}');
@@ -188,10 +200,156 @@ void runSynthetic() {
   );
   check('食い違いは結果に載る（表示側が警告を出せる）',
       fake.rateDisagrees && fake.beatRateBpm == 70);
+
+  print('\n5. 拍の列の素性 — しきい値を決めるための実測値');
+  // ここは合否を問わない。rMAD と網羅率でいずれ足切りしたいが、
+  // どの値なら正しい測定を落とさないのかが、まだ分かっていない。
+  // 判断できるだけの数値が並ぶまで、関門は入れない(2026-09-13 に
+  // 2回誤爆させた)。まず分布を見る。
+  print('   ${"信号".padRight(26)} ${"心拍".padLeft(8)} '
+      '${"rMAD%".padLeft(7)} ${"網羅%".padLeft(7)} ${"CV%".padLeft(7)}  品質');
+  void row(String label, VitalsResult r) {
+    print('   ${label.padRight(26)} '
+        '${(r.heartRateBpm?.toStringAsFixed(1) ?? "—").padLeft(8)} '
+        '${(r.beatIntervalRmadPercent?.toStringAsFixed(1) ?? "—").padLeft(7)} '
+        '${(r.beatCoveragePercent?.toStringAsFixed(0) ?? "—").padLeft(7)} '
+        '${(r.beatIntervalCvPercent?.toStringAsFixed(0) ?? "—").padLeft(7)}  '
+        '${r.quality.name}');
+  }
+  for (final double b in <double>[80, 100, 130, 170]) {
+    row('合成 1山 ${b.toStringAsFixed(0)} bpm',
+        analyzer.analyze(synthesise(bpm: b, seconds: 60, sampleRateHz: fs),
+            sampleRateHz: fs));
+  }
+
+  // 拍をでたらめな間隔(0.2〜1.6秒)で並べた信号。これは棄却したい側。
+  final math.Random jr = math.Random(5);
+  const double fsJ = 104.0;
+  final List<double> jittery = List<double>.generate(
+      (60 * fsJ).round(), (_) => 9.806 + 0.02 * (jr.nextDouble() - 0.5));
+  double next = 0;
+  while (next < 58) {
+    final int at = (next * fsJ).round();
+    for (int k = 0; k < 26; k++) {
+      if (at + k < jittery.length) {
+        jittery[at + k] += 0.05 * beatWave(k / fsJ);
+      }
+    }
+    next += 0.2 + jr.nextDouble() * 1.4;
+  }
+  row('でたらめな拍(棄却したい)',
+      analyzer.analyze(jittery, sampleRateHz: fsJ));
+
+  print('   ※ 犬プロファイルは2段構え(2026-09-15、文献調査で見直した):');
+  print('      rMAD > ${analyzer.irregularFairPercent.toStringAsFixed(0)}%'
+      ' で参考値へ格下げ、> '
+      '${analyzer.irregularUnusablePercent.toStringAsFixed(0)}% で算出不可。');
+  print('      下の関門(35%)は通したい側(合成 9.2〜26.8%)の実測から。');
+  print('      上の関門(55%)は文献にある犬の安静時変動の上限からの暫定値'
+      '(まだ実測の裏付けなし)。');
+
+  // 実機の記録から取った拍間隔のばらつき。しきい値の根拠そのものなので、
+  // ここに数値として残す。2026-09-13 の8件はいずれも「波の周期」と
+  // 「拍の数え上げ」が食い違っていた(224 対 70 など)。
+  const List<double> fieldRmad = <double>[
+    43.9, 44.7, 47.4, 50.6, 53.1, 54.3, 54.5, 57.5
+  ];
+  final double worstGood = <double>[9.2, 13.7, 18.3, 26.8]
+      .reduce((double a, double b) => a > b ? a : b);
+  final double worstBad =
+      fieldRmad.reduce((double a, double b) => a > b ? a : b);
+  check(
+      '通したい側の最悪 ${worstGood.toStringAsFixed(1)}% は '
+      '格下げ関門 ${analyzer.irregularFairPercent.toStringAsFixed(0)}% を'
+      ' 下回る(good のまま)',
+      worstGood < analyzer.irregularFairPercent);
+  check(
+      '棄却したい側の最悪 ${worstBad.toStringAsFixed(1)}% は '
+      '算出不可の関門 ${analyzer.irregularUnusablePercent.toStringAsFixed(0)}%'
+      ' を上回る(それでも落とす)',
+      worstBad > analyzer.irregularUnusablePercent);
+  // 43.9〜54.5%(実機8件のうち7件)は今回 35〜55% の帯に入り、算出不可では
+  // なく「参考値」に変わる。これが実際の犬で正しい振る舞いかどうかは、
+  // 手で数えた正解つきの実測(次の実験)でしか確かめられない。
+  final int nowFairInsteadOfUnusable = fieldRmad
+      .where((double v) =>
+          v > analyzer.irregularFairPercent &&
+          v <= analyzer.irregularUnusablePercent)
+      .length;
+  print('      → 実機8件のうち $nowFairInsteadOfUnusable 件が'
+      ' 算出不可→参考値 に変わる(要・実測での見直し)。');
+
+  print('\n6. 正しい測定を落としていないか（関門を入れたときの見張り）');
+  // 2026-09-13 に、足切りを入れて 80/100/130/170 bpm を全部
+  // 「算出不可」にした。正しい測定を棄却するのは、参考値として出すより
+  // 害が大きい。関門を触るときは必ずここが通ることを確かめる。
+  for (final double trueBpm in <double>[80, 100, 130, 170]) {
+    final VitalsResult g = analyzer.analyze(
+        synthesise(bpm: trueBpm, seconds: 60, sampleRateHz: fs),
+        sampleRateHz: fs);
+    check(
+        '${trueBpm.toStringAsFixed(0)} bpm を算出不可にしていない',
+        g.quality != VitalsQuality.unusable && g.heartRateBpm != null,
+        '${g.quality.name} / rMAD '
+        '${g.beatIntervalRmadPercent?.toStringAsFixed(1)}% / 網羅 '
+        '${g.beatCoveragePercent?.toStringAsFixed(0)}%');
+    // しきい値に余裕があることも見る。ぎりぎりだと、少し条件が変わった
+    // だけで正しい測定が落ちる。
+    check(
+        '${trueBpm.toStringAsFixed(0)} bpm の rMAD が格下げ関門'
+        ' ${analyzer.irregularFairPercent.toStringAsFixed(0)}% を下回る'
+        '(good のまま)',
+        (g.beatIntervalRmadPercent ?? 999) < analyzer.irregularFairPercent);
+  }
 }
 
+void runSampleRate() {
+  print('\n7. 周波数の出し方（T22：中央値 → 数÷時間）');
+  // きれいな時刻：2,500 µs おき → 400 Hz
+  final List<int> clean = List<int>.generate(4000, (int i) => i * 2500);
+  final double? f1 = estimateSampleRateHz(clean);
+  check('きれいな時刻は 400 Hz', f1 != null && (f1 - 400).abs() < 0.01,
+      '${f1?.toStringAsFixed(2)}');
+
+  // 9/12 のように偏ってばらつく時刻：6割は約 2,500 µs、4割は約 2,245 µs
+  // → 平均 2,398 µs（417 Hz）、中央値は約 2,500 µs（400 Hz 前後）
+  final math.Random r = math.Random(12);
+  final List<int> skew = <int>[0];
+  for (int i = 1; i < 25000; i++) {
+    final int base = (i % 5 < 3) ? 2500 : 2245;
+    skew.add(skew.last + base + r.nextInt(9) - 4);
+  }
+  final double? f2 = estimateSampleRateHz(skew);
+  final double? f2old = medianSampleRateHz(skew);
+  check('偏ってばらつく時刻は 417 Hz（中央値なら約 400 Hz）',
+      f2 != null && (f2 - 417.0).abs() < 1.0 && f2old != null && f2old < 405,
+      '新 ${f2?.toStringAsFixed(1)} Hz・旧 ${f2old?.toStringAsFixed(1)} Hz');
+
+  // パケット落ち：400 Hz の途中に 50 ms の抜けが3回 → 400 Hz のまま
+  final List<int> drop = <int>[0];
+  for (int i = 1; i < 8000; i++) {
+    drop.add(drop.last + ((i == 2000 || i == 4000 || i == 6000) ? 50000 : 2500));
+  }
+  final double? f3 = estimateSampleRateHz(drop);
+  check('パケット落ちがあっても 400 Hz', f3 != null && (f3 - 400).abs() < 0.01,
+      '${f3?.toStringAsFixed(2)}');
+
+  // 少なすぎる：20 個 → null
+  check('20 個しかないときは null',
+      estimateSampleRateHz(List<int>.generate(20, (int i) => i * 2500)) == null);
+}
+
+/// 9/12 の胸の採取を collar-pipeline（T09、数÷時間＝417 Hz）で出した心拍。
+const Map<String, double> _t09Bpm = <String, double>{
+  'chest-breath': 88.5,
+  'chest-dual-seated-2': 77.9,
+  'chest-dual-seated-breath': 81.1,
+  'chest-dual-swapped': 81.4,
+  'chest-hold': 83.3,
+};
+
 void runRealCapture(String path) {
-  print('\n4. 実測データ — ${path.split('/').last}');
+  print('\n8. 実測データ — ${path.split('/').last}');
   final File f = File(path);
   if (!f.existsSync()) {
     print('  … ファイルが見つかりません: $path');
@@ -231,17 +389,13 @@ void runRealCapture(String path) {
     return;
   }
 
-  // The device clock is monotonic microseconds; the median step is the true
-  // sample interval (a mean would be skewed by any dropped record).
-  final List<double> steps = <double>[];
-  for (int i = 1; i < us.length; i++) {
-    final double d = us[i] - us[i - 1];
-    if (d > 0 && d < 1e6) steps.add(d);
-  }
-  steps.sort();
-  final double fs = 1e6 / steps[steps.length ~/ 2];
+  // 周波数は「数÷時間」（大きな抜けは除く）。中央値は時刻のばらつきが偏ると
+  // 低く出て、心拍が約4%低くなっていた（T22、D-032）。比べるため両方出す。
+  final double fs = estimateSampleRateHz(us)!;
+  final double fsOld = medianSampleRateHz(us)!;
 
-  print('  標本 ${mag.length} 点、実効 ${fs.toStringAsFixed(1)} Hz、'
+  print('  標本 ${mag.length} 点、実効 ${fs.toStringAsFixed(1)} Hz'
+      '（旧い中央値なら ${fsOld.toStringAsFixed(1)} Hz）、'
       '${(mag.length / fs).toStringAsFixed(1)} 秒');
 
   // Human subject, so use the narrower range for this cross-check.
@@ -253,9 +407,19 @@ void runRealCapture(String path) {
         '   SDNN ${r.sdnnMs?.toStringAsFixed(1) ?? "—"} ms'
         '   RMSSD ${r.rmssdMs?.toStringAsFixed(1) ?? "—"} ms');
   }
-  check('SciPy で確立した 78 bpm と ±4 bpm 以内で一致',
-      r.heartRateBpm != null && (r.heartRateBpm! - 78.0).abs() <= 4.0,
-      '得られた値 ${r.heartRateBpm?.toStringAsFixed(1)}');
+  // 以前は全部の採取を「SciPy の 78 bpm ±4」と比べていたが、その 78 も
+  // 中央値の周波数（401 Hz）で出した値で、約4%低い可能性がある（T09・T22）。
+  // いまは採取ごとに collar-pipeline（T09、417 Hz）の値と ±0.5 bpm で比べる。
+  final List<String> parts = path.split('/');
+  final String capture = parts.length >= 4 ? parts[parts.length - 4] : '';
+  final double? ref = _t09Bpm[capture];
+  if (ref == null) {
+    print('  （$capture は T09 の比べる値がないので、心拍の一致は見ない）');
+  } else {
+    check('collar-pipeline（T09）の $ref bpm と ±0.5 bpm 以内で一致',
+        r.heartRateBpm != null && (r.heartRateBpm! - ref).abs() <= 0.5,
+        '得られた値 ${r.heartRateBpm?.toStringAsFixed(1)}');
+  }
   check('品質が good と判定される', r.quality == VitalsQuality.good,
       r.quality.name);
 }
@@ -263,6 +427,7 @@ void runRealCapture(String path) {
 void main(List<String> args) {
   print('collar_vitals self-test\n');
   runSynthetic();
+  runSampleRate();
   for (final String p in args) {
     runRealCapture(p);
   }

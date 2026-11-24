@@ -11,9 +11,11 @@
 library;
 
 import 'dart:async';
+import 'dart:io';
 
 import 'package:collar_data/collar_data.dart';
 import 'package:flutter/foundation.dart';
+import 'package:path_provider/path_provider.dart';
 
 import '../data/ble_collar_data_source.dart';
 import '../data/known_device.dart';
@@ -50,6 +52,16 @@ class CollarLink extends ChangeNotifier {
 
   BleCollarDataSource? _source;
   StreamSubscription<ConnStatus>? _statusSub;
+
+  /// つないでいる間に届いた全フレームを残す（T21）。接続ごとに作り、切断で閉じる。
+  FrameArchive? _archive;
+  StreamSubscription<CapturedFrame>? _captureSub;
+
+  /// 測定の開始・終了の印を書くために [VitalsSession] が使う。
+  FrameArchive? get archive => _archive;
+
+  /// テストや別の保存先のために差し替えられる。null ならアプリの Documents。
+  Future<String> Function()? archiveDir;
   StreamSubscription<List<CollarScanHit>>? _scanSub;
 
   /// The collar we are attached to, or attempting to attach to.
@@ -143,6 +155,7 @@ class CollarLink extends ChangeNotifier {
     await stopScan();
     final BleCollarDataSource src = BleCollarDataSource();
     _source = src;
+    await _openArchive(src);
     _statusSub = src.status.listen((ConnStatus s) {
       // A drop reported by the transport must move the UI out of "connected",
       // otherwise the button lies about the state.
@@ -195,6 +208,33 @@ class CollarLink extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// 生データの保存を始める。失敗しても接続そのものは続ける（保存は付加機能）。
+  Future<void> _openArchive(BleCollarDataSource src) async {
+    try {
+      final String dir = archiveDir != null
+          ? await archiveDir!()
+          : (await getApplicationDocumentsDirectory()).path;
+      final FrameArchive archive = FrameArchive(dir);
+      _archive = archive;
+      _captureSub = src.capturedFrames.listen(archive.add);
+    } on Exception catch (e) {
+      debugPrint('FrameArchive を開けなかった：$e');
+      _archive = null;
+    }
+  }
+
+  Future<void> _closeArchive() async {
+    await _captureSub?.cancel();
+    _captureSub = null;
+    final FrameArchive? a = _archive;
+    _archive = null;
+    try {
+      await a?.close();
+    } on FileSystemException catch (e) {
+      debugPrint('FrameArchive を閉じるときに失敗：$e');
+    }
+  }
+
   Future<void> _teardown() async {
     final BleCollarDataSource? src = _source;
     _source = null;
@@ -214,6 +254,8 @@ class CollarLink extends ChangeNotifier {
         // already gone
       }
     }
+    // STOP の応答まで残してから閉じる。
+    await _closeArchive();
   }
 
   /// Starts a discovery scan for the device list. Independent of connecting.

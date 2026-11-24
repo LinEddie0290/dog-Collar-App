@@ -1,4 +1,3 @@
-import 'package:collar_data/collar_data.dart';
 import 'package:flutter/widgets.dart';
 
 import 'app_language.dart';
@@ -11,53 +10,21 @@ import 'app_language.dart';
 class AppStrings {
   const AppStrings({
     required this.language,
-    required this.navHome,
-    required this.navHistory,
-    required this.navSettings,
-    required this.petName,
-    required this.petBreedAge,
+    required this.navToday,
+    required this.navHealth,
+    required this.navSafety,
+    required this.navMine,
     required this.bodyTempLabel,
-    required this.ambientTempLabel,
     required this.celsiusUnit,
     required this.justNow,
-    required this.notReceivedYet,
-    required this.respirationLabel,
     required this.breathsPerMinUnit,
-    required this.stableStatus,
-    required this.waitingForData,
-    required this.batteryLabel,
-    required this.barkTranslationTitle,
-    required this.comingSoon,
-    required this.barkTranslationDesc,
-    required this.historyChartTitle,
     required this.noDataYet,
-    required this.avgLabel,
-    required this.maxLabel,
-    required this.minLabel,
-    required this.historyInfoNote,
-    required this.settingsTitle,
-    required this.connectionSection,
-    required this.useMockToggleTitle,
-    required this.useMockToggleSubtitle,
-    required this.urlFieldLabel,
-    required this.statusLabel,
-    required this.connectButton,
-    required this.disconnectButton,
-    required this.collarSection,
-    required this.nameLabel,
-    required this.collarNameValue,
-    required this.firmwareLabel,
     required this.dataSection,
     required this.storageLocationLabel,
     required this.storageLocationDesc,
     required this.exportRecordsLabel,
     required this.languageSection,
     required this.appTitle,
-    required this.connDisconnected,
-    required this.connConnecting,
-    required this.connConnected,
-    required this.connReconnecting,
-    required this.navMap,
     required this.mapNotConfiguredTitle,
     required this.mapNotConfiguredDesc,
     required this.waitingForLocation,
@@ -131,6 +98,11 @@ class AppStrings {
     required this.deleteRecord,
     required this.durationLabel,
     required this.postureLabel,
+    required this.caveatIntermittent,
+    required this.coverageLabel,
+    required this.savedToFiles,
+    required this.caveatIrregular,
+    required this.rateFromBeatsNote,
     required this.beatRateLabel,
     required this.rateDisagreeWarning,
     required this.caveatRateDisagrees,
@@ -166,57 +138,66 @@ class AppStrings {
     required this.caveatUnusable,
     required this.caveatFair,
     required this.caveatManyGaps,
+    required this.conditionEditorTitle,
+    required this.conditionHealthSection,
+    required this.conditionSensorSection,
+    required this.positionLabel,
+    required this.positionNeck,
+    required this.positionChest,
+    required this.positionThigh,
+    required this.positionOther,
+    required this.pressureLabel,
+    required this.pressureFirm,
+    required this.pressureMedium,
+    required this.pressurePlaced,
+    required this.postureCarried,
+    required this.postureStanding,
+    required this.postureSitting,
+    required this.postureLyingDown,
+    required this.postureOnBack,
+    required this.pantingLabel,
+    required this.pantingYes,
+    required this.pantingNo,
+    required this.pantingUnknown,
+    required this.recentActivityLabel,
+    required this.activityResting,
+    required this.activityWalking,
+    required this.activityActive,
+    required this.activitySleeping,
+    required this.activityUnknown,
+    required this.referenceBpmLabel,
+    required this.referenceBpmHint,
+    required this.referenceDeltaLabel,
+    required this.editConditionAction,
+    required this.conditionNoteHint,
+    required this.unspecifiedLabel,
+    required this.rhythmStripTitle,
+    required this.rhythmStripHint,
+    required this.rhythmStripUnavailable,
+    required this.saveAsPhoto,
+    required this.savedToPhotos,
+    required this.savePhotoFailed,
+    required this.photoPermissionDenied,
   });
 
   final AppLanguage language;
 
-  final String navHome;
-  final String navHistory;
-  final String navSettings;
-
-  final String petName;
-  final String petBreedAge;
+  /// 下のタブ（T35・D-051）：今天・健康・测定・安全・我的。
+  final String navToday;
+  final String navHealth;
+  final String navSafety;
+  final String navMine;
 
   /// 赤外温度センサー(MLX90615)が返す体温。首輪が測れる唯一の生体指標。
   final String bodyTempLabel;
 
-  /// センサー自身の周囲温度。体温が周囲温度に近いときは、センサーが犬の
-  /// 皮膚を向いていないことを示す手がかりになる。
-  final String ambientTempLabel;
   final String celsiusUnit;
   final String justNow;
-  final String notReceivedYet;
 
-  final String respirationLabel;
   final String breathsPerMinUnit;
-  final String stableStatus;
-  final String waitingForData;
 
-  final String batteryLabel;
-
-  final String barkTranslationTitle;
-  final String comingSoon;
-  final String barkTranslationDesc;
-
-  final String historyChartTitle;
   final String noDataYet;
-  final String avgLabel;
-  final String maxLabel;
-  final String minLabel;
-  final String historyInfoNote;
 
-  final String settingsTitle;
-  final String connectionSection;
-  final String useMockToggleTitle;
-  final String useMockToggleSubtitle;
-  final String urlFieldLabel;
-  final String statusLabel;
-  final String connectButton;
-  final String disconnectButton;
-  final String collarSection;
-  final String nameLabel;
-  final String collarNameValue;
-  final String firmwareLabel;
   final String dataSection;
   final String storageLocationLabel;
   final String storageLocationDesc;
@@ -224,12 +205,6 @@ class AppStrings {
   final String languageSection;
   final String appTitle;
 
-  final String connDisconnected;
-  final String connConnecting;
-  final String connConnected;
-  final String connReconnecting;
-
-  final String navMap;
   final String mapNotConfiguredTitle;
   final String mapNotConfiguredDesc;
   final String waitingForLocation;
@@ -308,6 +283,11 @@ class AppStrings {
   final String deleteRecord;
   final String durationLabel;
   final String postureLabel;
+  final String caveatIntermittent;
+  final String coverageLabel;
+  final String savedToFiles;
+  final String caveatIrregular;
+  final String rateFromBeatsNote;
   final String beatRateLabel;
   final String rateDisagreeWarning;
   final String caveatRateDisagrees;
@@ -343,31 +323,46 @@ class AppStrings {
   final String caveatUnusable;
   final String caveatFair;
   final String caveatManyGaps;
-
-  /// 履歴画面の「直近N件」表示(言語によって語順が違うので関数にしている)。
-  String recentCountLabel(int count) {
-    switch (language) {
-      case AppLanguage.ja:
-        return '直近$count件';
-      case AppLanguage.en:
-        return 'Last $count readings';
-      case AppLanguage.zh:
-        return '最近$count条记录';
-    }
-  }
-
-  String connStatusLabel(ConnStatus status) {
-    switch (status) {
-      case ConnStatus.disconnected:
-        return connDisconnected;
-      case ConnStatus.connecting:
-        return connConnecting;
-      case ConnStatus.connected:
-        return connConnected;
-      case ConnStatus.reconnecting:
-        return connReconnecting;
-    }
-  }
+  final String conditionEditorTitle;
+  final String conditionHealthSection;
+  final String conditionSensorSection;
+  final String positionLabel;
+  final String positionNeck;
+  final String positionChest;
+  final String positionThigh;
+  final String positionOther;
+  final String pressureLabel;
+  final String pressureFirm;
+  final String pressureMedium;
+  final String pressurePlaced;
+  final String postureCarried;
+  final String postureStanding;
+  final String postureSitting;
+  final String postureLyingDown;
+  final String postureOnBack;
+  final String pantingLabel;
+  final String pantingYes;
+  final String pantingNo;
+  final String pantingUnknown;
+  final String recentActivityLabel;
+  final String activityResting;
+  final String activityWalking;
+  final String activityActive;
+  final String activitySleeping;
+  final String activityUnknown;
+  final String referenceBpmLabel;
+  final String referenceBpmHint;
+  final String referenceDeltaLabel;
+  final String editConditionAction;
+  final String conditionNoteHint;
+  final String unspecifiedLabel;
+  final String rhythmStripTitle;
+  final String rhythmStripHint;
+  final String rhythmStripUnavailable;
+  final String saveAsPhoto;
+  final String savedToPhotos;
+  final String savePhotoFailed;
+  final String photoPermissionDenied;
 
   /// GPSの精度表示 (例: "精度 ±5m")。
   String gpsAccuracyLabel(int meters) {
@@ -378,6 +373,19 @@ class AppStrings {
         return '±${meters}m accuracy';
       case AppLanguage.zh:
         return '精度 ±$meters米';
+    }
+  }
+
+  /// 地図の座標をコピーしたとき（T19）。出すのは首輪の生の値（WGS84）なので、
+  /// 高德地図（GCJ-02）に貼るとずれることを一緒に伝える（Q16）。
+  String get coordsCopied {
+    switch (language) {
+      case AppLanguage.ja:
+        return '座標（WGS84）をコピーしました。高德地図に貼ると約 500 m ずれることがあります。';
+      case AppLanguage.en:
+        return 'Coordinates (WGS84) copied. Amap may show them about 500 m off.';
+      case AppLanguage.zh:
+        return '已复制坐标（WGS84）。贴到高德地图可能偏差约 500 米。';
     }
   }
 
@@ -428,55 +436,21 @@ class AppStrings {
 
   static const AppStrings _ja = AppStrings(
     language: AppLanguage.ja,
-    navHome: 'ホーム',
-    navHistory: '履歴',
-    navSettings: '設定',
-    petName: 'モモ',
-    petBreedAge: '柴犬・2歳',
+    navToday: '今日',
+    navHealth: '健康',
+    navSafety: '安全',
+    navMine: 'マイ',
     bodyTempLabel: '体温',
-    ambientTempLabel: '周囲温度',
     celsiusUnit: '℃',
     justNow: 'たった今',
-    notReceivedYet: '未受信',
-    respirationLabel: '呼吸',
     breathsPerMinUnit: '回/分',
-    stableStatus: '安定しています',
-    waitingForData: '受信を待っています',
-    batteryLabel: '電池',
-    barkTranslationTitle: '鳴き声・感情翻訳',
-    comingSoon: '近日公開',
-    barkTranslationDesc: '鳴き声から気持ちを読み取る機能を開発中です',
-    historyChartTitle: '心拍数の推移(セッション内)',
     noDataYet: 'まだデータがありません',
-    avgLabel: '平均',
-    maxLabel: '最高',
-    minLabel: '最低',
-    historyInfoNote:
-        '現在表示しているのは、このアプリを起動してからの記録です。日付をまたいだ履歴の閲覧は、'
-        '端末に保存されたファイルを読み込む機能として今後追加予定です。',
-    settingsTitle: '設定',
-    connectionSection: '接続',
-    useMockToggleTitle: 'アプリ内モックを使う',
-    useMockToggleSubtitle: '首輪が無くても動作を確認できます',
-    urlFieldLabel: '接続先 URL',
-    statusLabel: '状態',
-    connectButton: '接続する',
-    disconnectButton: '切断する',
-    collarSection: '首輪',
-    nameLabel: '名前',
-    collarNameValue: 'モモの首輪',
-    firmwareLabel: 'ファームウェア',
     dataSection: 'データ',
     storageLocationLabel: '保存先',
     storageLocationDesc: '端末内に日付ごとに保存されます',
     exportRecordsLabel: '記録をエクスポート(準備中)',
     languageSection: '言語',
     appTitle: '首輪アプリ',
-    connDisconnected: '未接続',
-    connConnecting: '接続中…',
-    connConnected: '接続済み',
-    connReconnecting: '再接続中…',
-    navMap: '地図',
     mapNotConfiguredTitle: '地図の設定が必要です',
     mapNotConfiguredDesc: '高徳地図のAPIキーを設定すると、ここに現在地が表示されます。',
     waitingForLocation: '位置情報の受信を待っています',
@@ -547,6 +521,11 @@ class AppStrings {
     deleteRecord: 'この記録を削除',
     durationLabel: '測定時間',
     postureLabel: '姿勢',
+    caveatIntermittent: '拍を拾えていた時間が測定時間の半分に届きません。センサーが体から離れていた可能性があります。',
+    coverageLabel: '拍を拾えた割合',
+    savedToFiles: 'Documents/reports に保存しました。「ファイル」アプリ →　このiPhone内 → Collar App から取り出せます。',
+    caveatIrregular: '拍の間隔が大きくばらついているため、心拍は算出できません。センサーが体にきちんと当たっていない可能性があります。',
+    rateFromBeatsNote: 'この心拍は拍を数えて出した値です。',
     beatRateLabel: '拍を数えた値',
     rateDisagreeWarning: '波の周期から出した心拍と、拍を1つずつ数えた心拍が食い違っています。センサーの当て方で1拍の中の2つ目の山を拾っている可能性があります。当て直して測り直してください。',
     caveatRateDisagrees: '2つの数え方が食い違ったため、この心拍は参考値です。',
@@ -582,61 +561,65 @@ class AppStrings {
     caveatUnusable: '信号が不十分なため、心拍数は算出できませんでした。',
     caveatFair: '信号が弱めです。参考値として扱ってください。',
     caveatManyGaps: '通信の取りこぼしが多いため、拍間隔の指標は信頼できません。',
+    conditionEditorTitle: '測定条件を記録',
+    conditionHealthSection: '犬の状態',
+    conditionSensorSection: 'センサーの当て方（実験用・任意）',
+    positionLabel: '取り付け位置',
+    positionNeck: '首',
+    positionChest: '胸',
+    positionThigh: '太もも',
+    positionOther: 'その他',
+    pressureLabel: '押し当て',
+    pressureFirm: '強め',
+    pressureMedium: '普通',
+    pressurePlaced: '軽く置くだけ',
+    postureCarried: '抱っこ',
+    postureStanding: '立っている',
+    postureSitting: '座っている',
+    postureLyingDown: '伏せている',
+    postureOnBack: '仰向け',
+    pantingLabel: 'パンティング（浅く速い呼吸）',
+    pantingYes: 'している',
+    pantingNo: 'していない',
+    pantingUnknown: 'わからない',
+    recentActivityLabel: '直前1分の活動',
+    activityResting: '安静にしていた',
+    activityWalking: '歩いていた',
+    activityActive: '活発に動いていた・遊んでいた',
+    activitySleeping: '寝ていた',
+    activityUnknown: 'わからない',
+    referenceBpmLabel: '手で数えた心拍（正解）',
+    referenceBpmHint: '例: 15秒数えて×4。空欄でも構いません。',
+    referenceDeltaLabel: 'アプリの値との差',
+    editConditionAction: '測定条件を編集',
+    conditionNoteHint: '気づいたことがあれば（任意）',
+    unspecifiedLabel: '未記入',
+    rhythmStripTitle: '波形と検出した拍',
+    rhythmStripHint: '横にスクロールすると全体を確認できます',
+    rhythmStripUnavailable: 'この測定の波形画像はありません',
+    saveAsPhoto: '写真として保存',
+    savedToPhotos: '写真に保存しました',
+    savePhotoFailed: '保存できませんでした',
+    photoPermissionDenied: '写真への保存が許可されていません。設定アプリで許可してください。',
   );
 
   static const AppStrings _en = AppStrings(
     language: AppLanguage.en,
-    navHome: 'Home',
-    navHistory: 'History',
-    navSettings: 'Settings',
-    petName: 'Momo',
-    petBreedAge: 'Shiba Inu · 2 yrs',
+    navToday: 'Today',
+    navHealth: 'Health',
+    navSafety: 'Safety',
+    navMine: 'Me',
     bodyTempLabel: 'Body Temp',
-    ambientTempLabel: 'Ambient',
     celsiusUnit: '°C',
     justNow: 'Just now',
-    notReceivedYet: 'No data yet',
-    respirationLabel: 'Respiration',
     breathsPerMinUnit: 'breaths/min',
-    stableStatus: 'Stable',
-    waitingForData: 'Waiting for data',
-    batteryLabel: 'Battery',
-    barkTranslationTitle: 'Bark & Emotion Translation',
-    comingSoon: 'Coming soon',
-    barkTranslationDesc:
-        "A feature to read your dog's mood from its bark is in development.",
-    historyChartTitle: 'Heart rate trend (this session)',
     noDataYet: 'No data yet',
-    avgLabel: 'Avg',
-    maxLabel: 'Max',
-    minLabel: 'Min',
-    historyInfoNote:
-        'This shows data recorded since the app was launched. Browsing history '
-        'across multiple days, read from files saved on the device, is a planned '
-        'future feature.',
-    settingsTitle: 'Settings',
-    connectionSection: 'Connection',
-    useMockToggleTitle: 'Use in-app mock',
-    useMockToggleSubtitle: 'Try the app without a physical collar',
-    urlFieldLabel: 'Server URL',
-    statusLabel: 'Status',
-    connectButton: 'Connect',
-    disconnectButton: 'Disconnect',
-    collarSection: 'Collar',
-    nameLabel: 'Name',
-    collarNameValue: "Momo's Collar",
-    firmwareLabel: 'Firmware',
     dataSection: 'Data',
     storageLocationLabel: 'Storage location',
     storageLocationDesc: 'Saved on this device, organized by date',
     exportRecordsLabel: 'Export records (coming soon)',
     languageSection: 'Language',
     appTitle: 'Collar App',
-    connDisconnected: 'Disconnected',
-    connConnecting: 'Connecting…',
-    connConnected: 'Connected',
-    connReconnecting: 'Reconnecting…',
-    navMap: 'Map',
     mapNotConfiguredTitle: 'Map setup required',
     mapNotConfiguredDesc:
         'Set up an Amap API key to see the current location here.',
@@ -708,6 +691,11 @@ class AppStrings {
     deleteRecord: 'Delete this record',
     durationLabel: 'Duration',
     postureLabel: 'Posture',
+    caveatIntermittent: 'Beats were detected for less than half of the measurement. The sensor may have lost contact with the body.',
+    coverageLabel: 'Beat coverage',
+    savedToFiles: 'Saved to Documents/reports. Open the Files app → On My iPhone → Collar App to get it.',
+    caveatIrregular: 'The beat intervals varied too much to compute a heart rate. The sensor may not be held firmly against the body.',
+    rateFromBeatsNote: 'This rate comes from counting individual beats.',
     beatRateLabel: 'Counted beats',
     rateDisagreeWarning: 'The rate from the signal period and the rate from counting individual beats disagree. The sensor may be picking up the second wave within each beat. Reposition it and measure again.',
     caveatRateDisagrees: 'The two methods disagreed, so treat this rate as approximate.',
@@ -743,64 +731,70 @@ class AppStrings {
     caveatUnusable: 'The signal was too weak to compute a heart rate.',
     caveatFair: 'The signal was weak. Treat this as approximate.',
     caveatManyGaps: 'Too many packets were dropped, so the interval metrics are unreliable.',
+    conditionEditorTitle: 'Record conditions',
+    conditionHealthSection: 'Dog\'s state',
+    conditionSensorSection: 'Sensor placement (for experiments, optional)',
+    positionLabel: 'Sensor position',
+    positionNeck: 'Neck',
+    positionChest: 'Chest',
+    positionThigh: 'Thigh',
+    positionOther: 'Other',
+    pressureLabel: 'Pressure',
+    pressureFirm: 'Firm',
+    pressureMedium: 'Medium',
+    pressurePlaced: 'Just placed',
+    postureCarried: 'Held',
+    postureStanding: 'Standing',
+    postureSitting: 'Sitting',
+    postureLyingDown: 'Lying down',
+    postureOnBack: 'On its back',
+    pantingLabel: 'Panting',
+    pantingYes: 'Yes',
+    pantingNo: 'No',
+    pantingUnknown: 'Not sure',
+    recentActivityLabel: 'Activity in the last minute',
+    activityResting: 'Resting',
+    activityWalking: 'Walking',
+    activityActive: 'Active / playing',
+    activitySleeping: 'Sleeping',
+    activityUnknown: 'Not sure',
+    referenceBpmLabel: 'Hand-counted heart rate (reference)',
+    referenceBpmHint: 'e.g. count for 15s, x4. Optional.',
+    referenceDeltaLabel: 'Difference from the measured value',
+    editConditionAction: 'Edit conditions',
+    conditionNoteHint: 'Anything else you noticed (optional)',
+    unspecifiedLabel: 'Not recorded',
+    rhythmStripTitle: 'Waveform & detected beats',
+    rhythmStripHint: 'Scroll sideways to see the whole recording',
+    rhythmStripUnavailable: 'No waveform image for this measurement',
+    saveAsPhoto: 'Save as photo',
+    savedToPhotos: 'Saved to Photos',
+    savePhotoFailed: 'Couldn\'t save',
+    photoPermissionDenied: 'Photo library access isn\'t allowed. Enable it in Settings.',
   );
 
   static const AppStrings _zh = AppStrings(
     language: AppLanguage.zh,
-    navHome: '首页',
-    navHistory: '历史',
-    navSettings: '设置',
-    petName: 'Momo',
-    petBreedAge: '柴犬・2岁',
+    navToday: '今天',
+    navHealth: '健康',
+    navSafety: '安全',
+    navMine: '我的',
     bodyTempLabel: '体温',
-    ambientTempLabel: '环境温度',
     celsiusUnit: '℃',
     justNow: '刚刚',
-    notReceivedYet: '暂无数据',
-    respirationLabel: '呼吸',
     breathsPerMinUnit: '次/分',
-    stableStatus: '状态稳定',
-    waitingForData: '等待数据接收',
-    batteryLabel: '电量',
-    barkTranslationTitle: '吠叫·情绪翻译',
-    comingSoon: '即将推出',
-    barkTranslationDesc: '正在开发从吠叫声读取情绪的功能',
-    historyChartTitle: '心率趋势(本次会话)',
     noDataYet: '暂无数据',
-    avgLabel: '平均',
-    maxLabel: '最高',
-    minLabel: '最低',
-    historyInfoNote:
-        '当前显示的是本次启动应用以来记录的数据。跨日期查看历史记录(读取保存在设备中的'
-        '文件)是计划中的后续功能。',
-    settingsTitle: '设置',
-    connectionSection: '连接',
-    useMockToggleTitle: '使用应用内模拟数据',
-    useMockToggleSubtitle: '即使没有项圈也能体验功能',
-    urlFieldLabel: '连接地址 URL',
-    statusLabel: '状态',
-    connectButton: '连接',
-    disconnectButton: '断开连接',
-    collarSection: '项圈',
-    nameLabel: '名称',
-    collarNameValue: 'Momo 的项圈',
-    firmwareLabel: '固件版本',
     dataSection: '数据',
     storageLocationLabel: '保存位置',
     storageLocationDesc: '按日期保存在设备本地',
     exportRecordsLabel: '导出记录(即将推出)',
     languageSection: '语言',
     appTitle: '项圈应用',
-    connDisconnected: '未连接',
-    connConnecting: '连接中…',
-    connConnected: '已连接',
-    connReconnecting: '重新连接中…',
-    navMap: '地图',
     mapNotConfiguredTitle: '需要配置地图',
     mapNotConfiguredDesc: '配置高德地图 API Key 后，这里会显示当前位置。',
     waitingForLocation: '等待位置信息',
     lastKnownLocationPrefix: '最后已知位置',
-    navMeasure: '测量',
+    navMeasure: '测定',
     measureStart: '开始测量',
     measureStop: '停止测量',
     measureHint60s: '约 60 秒',
@@ -866,6 +860,11 @@ class AppStrings {
     deleteRecord: '删除这条记录',
     durationLabel: '测量时长',
     postureLabel: '姿势',
+    caveatIntermittent: '仅在不足一半的测量时间内检出心跳。传感器可能与身体脱离接触。',
+    coverageLabel: '心跳覆盖率',
+    savedToFiles: '已保存到 Documents/reports。可在「文件」App →　我的 iPhone → Collar App 中取出。',
+    caveatIrregular: '心跳间隔波动过大，无法计算心率。传感器可能未紧贴身体。',
+    rateFromBeatsNote: '此心率由逐拍计数得出。',
     beatRateLabel: '按心跳计数',
     rateDisagreeWarning: '由信号周期得出的心率与逐拍计数得出的心率不一致。传感器可能捕捉到了每次心跳中的第二个波峰。请重新放置后再测。',
     caveatRateDisagrees: '两种计数方式不一致，此心率仅供参考。',
@@ -901,6 +900,46 @@ class AppStrings {
     caveatUnusable: '信号不足，无法计算心率。',
     caveatFair: '信号较弱，请作为参考值看待。',
     caveatManyGaps: '丢包较多，逐拍间隔指标不可靠。',
+    conditionEditorTitle: '记录测量条件',
+    conditionHealthSection: '狗的状态',
+    conditionSensorSection: '传感器放置方式（用于实验，可选）',
+    positionLabel: '传感器位置',
+    positionNeck: '颈部',
+    positionChest: '胸部',
+    positionThigh: '大腿内侧',
+    positionOther: '其他',
+    pressureLabel: '按压程度',
+    pressureFirm: '用力按压',
+    pressureMedium: '中等力度',
+    pressurePlaced: '轻放',
+    postureCarried: '抱着',
+    postureStanding: '站立',
+    postureSitting: '坐着',
+    postureLyingDown: '趴着',
+    postureOnBack: '仰卧',
+    pantingLabel: '喘气（急促浅呼吸）',
+    pantingYes: '是',
+    pantingNo: '否',
+    pantingUnknown: '不确定',
+    recentActivityLabel: '过去1分钟的活动',
+    activityResting: '安静休息',
+    activityWalking: '走动',
+    activityActive: '活跃玩耍',
+    activitySleeping: '睡觉',
+    activityUnknown: '不确定',
+    referenceBpmLabel: '手动数的心率（参考值）',
+    referenceBpmHint: '例如：数15秒x4。可以留空。',
+    referenceDeltaLabel: '与App测量值的差异',
+    editConditionAction: '编辑测量条件',
+    conditionNoteHint: '其他备注（可选）',
+    unspecifiedLabel: '未记录',
+    rhythmStripTitle: '波形与检测到的心跳',
+    rhythmStripHint: '左右滑动可查看完整记录',
+    rhythmStripUnavailable: '此次测量没有波形图像',
+    saveAsPhoto: '保存为照片',
+    savedToPhotos: '已保存到相册',
+    savePhotoFailed: '保存失败',
+    photoPermissionDenied: '没有相册权限，请在设置中允许。',
   );
 }
 

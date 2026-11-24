@@ -15,5 +15,6 @@ export 'src/collar_data_source.dart';
 export 'src/fake_collar_data_source.dart';
 export 'src/websocket_collar_data_source.dart';
 export 'src/raw_archive.dart';
+export 'src/frame_archive.dart';
 export 'src/filters.dart';
 export 'src/collar_repository.dart';

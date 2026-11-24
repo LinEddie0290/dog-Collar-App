@@ -25,9 +25,20 @@ import 'biquad.dart';
 class HeartRateRange {
   const HeartRateRange({required this.minBpm, required this.maxBpm});
 
-  /// Wide enough for any dog from a resting Great Dane to an excited puppy.
+  /// Wide enough for any resting dog, from a large breed at rest to an
+  /// excited small one — **for a single resting measurement**, which is what
+  /// this app does today.
+  ///
+  /// 2026-09-15、文献調査(docs/research/犬の心拍数.md)で 50–220 を見直した。
+  /// 下は 50 だと小型犬の実測最小値 41.8 bpm を取りこぼす。上は Merck の
+  /// 基準で「自宅で安静にしている健康な犬が 200 bpm はそれ自体が異常」と
+  /// されており、220 まで探す理由がない。探索範囲を無用に広げると、
+  /// 自己相関が高いほうの偽の周期を拾いやすくなる副作用もある(実機で
+  /// 224 bpm を「信頼できる」と誤って出した過去の壊れ方と同じ種類)。
+  /// 子犬は 24 時間最大 274 bpm まで出るが、この範囲は対象外
+  /// (成犬の安静時単発測定が今の用途)。
   static const HeartRateRange dog =
-      HeartRateRange(minBpm: 50, maxBpm: 220);
+      HeartRateRange(minBpm: 40, maxBpm: 200);
 
   /// Narrower, for validating the pipeline on a human subject.
   static const HeartRateRange human =
@@ -71,6 +82,7 @@ class VitalsResult {
     this.unusableReason,
     this.beatRateBpm,
     this.rateDisagrees = false,
+    this.rateFromBeats = false,
   });
 
   final double sampleRateHz;
@@ -105,6 +117,16 @@ class VitalsResult {
   /// このとき品質は [VitalsQuality.good] にはしない。2つの独立した数え方が
   /// 一致しないものを「信頼できる」と表示してはいけない。
   final bool rateDisagrees;
+
+  /// [heartRateBpm] が自己相関ではなく拍の数え上げから来ている。
+  ///
+  /// 2つが食い違ったときは拍を数えた値を採る。理由は実機で2回続けて
+  /// 確かめられたため(2026-09-13): 画面の拍のしるしが 72 /分のときに
+  /// 自己相関は 137 bpm、別の記録では拍が 70 bpm のときに 224 bpm。
+  /// 224 は探索範囲の上限 220 に張り付いた値で、自己相関が失敗したときの
+  /// 典型的な形。400 Hz の実測データでは両者が一致する(77〜78 bpm)ので、
+  /// 検証できている場合にこの選び方が害になることはない。
+  final bool rateFromBeats;
 
   /// Individual beat times, for plotting and for variability.
   final List<double> beatTimesSeconds;
@@ -150,6 +172,17 @@ class VitalsResult {
   /// Beats actually detected, for the record shown to a vet.
   int get beatCount => beatTimesSeconds.length;
 
+  /// 拍間隔のばらつき（中央値からのずれの中央値 ÷ 中央値、%）。
+  /// [beatIntervalCvPercent] より飛び値に強く、画面に出すのはこちら。
+  double? get beatIntervalRmadPercent => beatIntervalsMs.length < 3
+      ? null
+      : VitalsAnalyzer._rmadPercent(beatIntervalsMs);
+
+  /// 拍が測定時間のどれだけを覆っているか（%）。
+  double? get beatCoveragePercent => beatIntervalsMs.length < 3
+      ? null
+      : VitalsAnalyzer._coveragePercent(beatIntervalsMs, durationSeconds);
+
   @override
   String toString() => 'VitalsResult(${quality.name}, '
       'HR=${heartRateBpm?.toStringAsFixed(1) ?? "—"} bpm '
@@ -172,9 +205,29 @@ class VitalsAnalyzer {
     this.respirationHighHz = 0.7,
     this.minConfidenceGood = 0.30,
     this.minConfidenceFair = 0.15,
+    this.irregularFairPercent = 35.0,
+    this.irregularUnusablePercent = dogIrregularUnusablePercent,
   });
 
   final HeartRateRange range;
+
+  /// 拍の列の乱れが、この値(%, rMAD)を超えたら「算出不可」にする。
+  ///
+  /// 2026-09-13、両側の実測値(通したい側=合成信号 9.2〜26.8%、棄却したい側
+  /// =実機8件 43.9〜57.5%)から 35% と決めた。ただしこれは「拍の列が拍の列と
+  /// 呼べるか」の関門で、犬の生理的な変動は考えていなかった。
+  ///
+  /// 犬には洞性不整脈（呼吸で心拍が周期的に揺れる）が正常所見としてあり、
+  /// 安静時の健康な犬で SDNN が平均の 30〜55% に達するという報告がある
+  /// (2026-09-15、docs/research/犬の心拍数.md の文献調査)。35% を境に
+  /// 即「算出不可」にすると、安静な健康犬の測定を誤って落としかねない。
+  ///
+  /// そこで [irregularFairPercent]（既定 35%）は「参考値へ格下げ」に留め、
+  /// この値（既定 55%、文献にある変動の上限）を超えて初めて「算出不可」に
+  /// する。**55% はまだ実測で裏付けていない、文献からの暫定値。** 手で
+  /// 数えた正解つきの実測が増えたら(次の実験)、35% のときと同じ手順 —
+  /// 同じ実装で測った両側の値から — で必ず見直す。
+  static const double dogIrregularUnusablePercent = 55.0;
 
   /// 8–40 Hz. Chosen empirically on 2026-09-12: of the bands tried
   /// (0.7–12, 1–20, 2–25, 4–30, 5–40, 8–40 Hz) this gave the sharpest
@@ -190,6 +243,12 @@ class VitalsAnalyzer {
   final double minConfidenceGood;
   final double minConfidenceFair;
 
+  /// この値を超えたら good を fair へ格下げる(算出不可にはしない)。
+  final double irregularFairPercent;
+
+  /// この値を超えたら算出不可にする。[dogIrregularUnusablePercent] を参照。
+  final double irregularUnusablePercent;
+
   /// Shortest window worth analysing. At 50 bpm the slowest plausible beat is
   /// 1.2 s, and the autocorrelation needs several cycles to be meaningful.
   static const double minDurationSeconds = 15.0;
@@ -197,6 +256,34 @@ class VitalsAnalyzer {
   /// これ未満のサンプリングでは 8 Hz 以上の心弾動成分がほとんど残らないので、
   /// 心拍は「算出不可」とする。LSM6DS3TR-C の設定値で言えば 52 Hz 以上。
   static const double minSampleRateHz = 40.0;
+
+  /// 拍間隔のばらつき。中央値からのずれの中央値 ÷ 中央値（%）。
+  ///
+  /// 標準偏差ではなく中央値を使うのは、拍を1つ数え落とすと間隔が2倍の値に
+  /// なり、それが数個混ざるだけで標準偏差が壊れるから。中央値なら半分以上が
+  /// 正しければ保たれる。
+  static double _rmadPercent(List<double> intervals) {
+    final List<double> sorted = List<double>.of(intervals)..sort();
+    final double median = sorted[sorted.length ~/ 2];
+    if (median <= 0) return 999;
+    final List<double> dev = intervals
+        .map((double v) => (v - median).abs())
+        .toList(growable: false)
+      ..sort();
+    return dev[dev.length ~/ 2] / median * 100;
+  }
+
+  /// 拍が測定時間のどれだけを覆っているか（%）。
+  ///
+  /// 拍の数 × 間隔の中央値 ÷ 測定時間。途切れ途切れにしか拾えていない
+  /// 測定を見つけるための物差し。間隔のばらつきだけでは、拾えた区間が
+  /// 揃っていれば通ってしまう。
+  static double _coveragePercent(List<double> intervals, double seconds) {
+    if (seconds <= 0) return 0;
+    final List<double> sorted = List<double>.of(intervals)..sort();
+    final double median = sorted[sorted.length ~/ 2];
+    return intervals.length * median / 1000 / seconds * 100;
+  }
 
   /// [minSeconds] は「この長さに足りなければ算出しない」境界。既定は
   /// [minDurationSeconds]（保存する測定の基準）。画面に出す途中の推定値は
@@ -347,6 +434,7 @@ class VitalsAnalyzer {
     }
 
     // 拍の間隔の中央値から出した心拍。自己相関の答えと突き合わせる。
+    // 中央値なので、数え落としで1つ2つ長い間隔が混ざっても崩れない。
     double? beatRate;
     if (intervals.length >= 3) {
       final List<double> sorted = List<double>.of(intervals)..sort();
@@ -354,24 +442,73 @@ class VitalsAnalyzer {
       if (median > 0) beatRate = 60000 / median;
     }
     bool disagrees = false;
+    bool fromBeats = false;
+    bool irregular = false;
     if (bpm != null && beatRate != null && bpm > 0) {
       final double ratio = beatRate / bpm;
       disagrees = ratio < 0.75 || ratio > 1.33;
-    }
-    if (disagrees && quality == VitalsQuality.good) {
-      // 2つの独立した数え方が一致しないものを「信頼できる」とは言わない。
-      quality = VitalsQuality.fair;
+      if (disagrees &&
+          beatRate >= range.minBpm &&
+          beatRate <= range.maxBpm) {
+        // 食い違ったら拍を数えた値を採る。拍は1つずつ数えられるので
+        // 確かめようがあるが、自己相関の周期は確かめようがない。
+        bpm = beatRate;
+        fromBeats = true;
+      }
+      if (disagrees && quality == VitalsQuality.good) {
+        // 2つの独立した数え方が一致しないものを「信頼できる」とは言わない。
+        // 条件に disagrees を入れ忘れると、拍が数えられた測定が全部
+        // 参考値に落ちて good が一切出なくなる(2026-09-13 にやった)。
+        quality = VitalsQuality.fair;
+      }
     }
 
+    // 「その拍の列は本当に拍の列か」の関門。しきい値は [irregularFairPercent]
+    // と [irregularUnusablePercent] のドキュメントを見ること。
+    //
+    // 物差しは rMAD（中央値からのずれの中央値 ÷ 中央値）。標準偏差の変動
+    // 係数は使えない。でたらめに並べた拍の変動係数 25% が正しい信号の
+    // 33〜50% より小さく、大小が逆転していた。
+    //
+    // 下の関門(既定 35%)は、同じ実装で測った両側の実測値から決めた
+    // (2026-09-13、すべて Dart 側の値):
+    //
+    //   通したい側 — 合成信号 80/100/130/170 bpm → 9.2 / 13.7 / 18.3 / 26.8%
+    //   棄却したい側 — 実機の記録8件（いずれも2つの数え方が食い違った）
+    //                  → 43.9 / 44.7 / 47.4 / 50.6 / 53.1 / 54.3 / 54.5 / 57.5%
+    //
+    // 26.8 と 43.9 の間に隙間がある。35% はその真ん中。上の関門(既定 55%)
+    // の根拠は [dogIrregularUnusablePercent] を参照。まだ実測の裏付けがない。
+    //
+    // 網羅率（拍の数 × 間隔の中央値 ÷ 測定時間）は関門にしない。実機の
+    // 記録が 13〜86% で、合成信号の 62〜79% と重なって分離しないため。
+    // 数値としては意味があるので表示と CSV には残す。
+    //
+    // Python で測った値(合成 80 bpm で 3.8%)を根拠にしようとして失敗した。
+    // 実装が違えば値も違う。しきい値は必ず同じ実装の値から決める。
+    if (intervals.length >= 3 && quality != VitalsQuality.unusable) {
+      final double rmad = _rmadPercent(intervals);
+      if (rmad > irregularUnusablePercent) {
+        quality = VitalsQuality.unusable;
+        irregular = true;
+      } else if (rmad > irregularFairPercent &&
+          quality == VitalsQuality.good) {
+        // 犬の生理的な変動かもしれない範囲。算出不可にはしないが、
+        // 「信頼できる」とも言わない。
+        quality = VitalsQuality.fair;
+      }
+    }
     return VitalsResult(
       sampleRateHz: sampleRateHz,
       durationSeconds: duration,
       quality: quality,
       beatRateBpm: beatRate,
       rateDisagrees: disagrees,
+      rateFromBeats: fromBeats,
       heartRateBpm: quality == VitalsQuality.unusable ? null : bpm,
-      unusableReason:
-          quality == VitalsQuality.unusable ? 'no_periodicity' : null,
+      unusableReason: quality != VitalsQuality.unusable
+          ? null
+          : (irregular ? 'irregular' : 'no_periodicity'),
       heartRateConfidence: confidence,
       beatTimesSeconds: beatTimes,
       beatIntervalsMs: intervals,

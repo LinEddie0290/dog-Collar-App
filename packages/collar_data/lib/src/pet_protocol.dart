@@ -401,6 +401,9 @@ class PetReassembler {
   /// True while a message is partially received.
   bool get inProgress => _messageId != null;
 
+  /// 直前に組み上がったフレーム全体（ヘッダーつき）。生データの保存用（T21）。
+  Uint8List? lastFrame;
+
   void reset() {
     _messageId = null;
     _total = 0;
@@ -446,7 +449,9 @@ class PetReassembler {
       _data.add(Uint8List.sublistView(bytes, petFragmentHeaderSize));
 
       if (_data.length == total) {
-        final PetFrame frame = decodeFrame(_data.toBytes());
+        final Uint8List all = _data.toBytes();
+        final PetFrame frame = decodeFrame(all);
+        lastFrame = all;
         reset();
         return frame;
       }

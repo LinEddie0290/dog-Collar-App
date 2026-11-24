@@ -1,0 +1,11 @@
+name: collar_imu_cnn
+description: >
+  Pure-Dart inference for the collar's small IMU CNN (T24). Weights come from
+  collar-pipeline's scripts/export_cnn.py (BatchNorm folded). No external
+  packages, no Flutter — `dart run bin/check.dart` checks it against PyTorch,
+  same philosophy as ../collar_vitals.
+version: 0.1.0
+publish_to: none
+
+environment:
+  sdk: ">=3.0.0 <4.0.0"

@@ -40,10 +40,17 @@
 	<!-- iOS 12 以前向け。新しい端末では上の項目が使われる。 -->
 	<key>NSBluetoothPeripheralUsageDescription</key>
 	<string>首輪とつないで、ワンちゃんの体温と位置を受け取るために Bluetooth を使用します。</string>
+	<!-- T34-F：開発用。同じ Wi-Fi の PC（正轩の Unity）から WebSocket で動きのデータを受ける。 -->
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>開発中のテストで、同じ Wi-Fi のパソコンから動きのデータを受け取るために使用します。</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>地図にワンちゃんと自分の位置を表示するために、位置情報を使用します。</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
 	<string>ワンちゃんが安全エリアから出たときにお知らせするため、バックグラウンドでも位置情報を使用します。</string>
+	<!-- 波形画像を「写真」に保存するため(gal パッケージ)。アルバムを指定せず
+	     追加のみなので Add-only の説明文で足りる。 -->
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>測定の波形画像を写真に保存するために使用します。</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

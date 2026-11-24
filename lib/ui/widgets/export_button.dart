@@ -45,10 +45,24 @@ class _RecordExportButtonState extends State<RecordExportButton> {
         csv: csv,
       );
       if (!mounted) return;
-      await Share.shareXFiles(
-        paths.map((String p) => XFile(p)).toList(growable: false),
-        subject: '${s.reportTitle} ${RecordExport.baseName(widget.record)}',
-      );
+      // ファイルはもう書けている。共有シートが出せなくても「失敗」では
+      // ないので、保存先を伝える。Documents は UIFileSharingEnabled を
+      // 立ててあるので「ファイル」アプリから取り出せる。
+      try {
+        await Share.shareXFiles(
+          paths.map((String p) => XFile(p)).toList(growable: false),
+          subject: '${s.reportTitle} ${RecordExport.baseName(widget.record)}',
+          sharePositionOrigin: _origin(),
+        );
+      } catch (e) {
+        debugPrint('共有シートを出せなかった: $e');
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('${s.savedToFiles}\n'
+              '${paths.map((String p) => p.split('/').last).join('  ')}'),
+          duration: const Duration(seconds: 6),
+        ));
+      }
       // Exception だけでなく Error も拾う。壊れたフォントや空ファイルは
       // RangeError を投げるので、Exception だけ見ていると画面が固まる。
     } catch (e) {
@@ -59,6 +73,23 @@ class _RecordExportButtonState extends State<RecordExportButton> {
     } finally {
       if (mounted) setState(() => _busy = false);
     }
+  }
+
+
+  /// 共有シートを出す位置。iPad では吹き出しの根元になる。
+  ///
+  /// iPhone でも省略できない。省略すると share_plus が
+  /// `sharePositionOrigin: argument must be set` で失敗する。
+  /// ゼロ矩形も拒否されるので、押されたボタン自身の位置を渡す。
+  Rect _origin() {
+    final RenderObject? box = context.findRenderObject();
+    if (box is RenderBox && box.hasSize && box.size.width > 0) {
+      return box.localToGlobal(Offset.zero) & box.size;
+    }
+    // 取れなければ画面中央の小さな矩形。ゼロでなければ通る。
+    final Size s = MediaQuery.sizeOf(context);
+    return Rect.fromCenter(
+        center: Offset(s.width / 2, s.height / 2), width: 1, height: 1);
   }
 
   @override

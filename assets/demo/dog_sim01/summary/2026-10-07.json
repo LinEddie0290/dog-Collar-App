@@ -1,0 +1,53 @@
+{
+  "schema": "collar.daily_summary/0.1",
+  "dog_id": "dog_sim01",
+  "date": "2026-10-07",
+  "generated_at": "2026-10-14T22:59:03+08:00",
+  "categories": [
+    {
+      "id": "exercise",
+      "status": "collecting",
+      "alert": null,
+      "daily": {
+        "text_key": "exercise.daily",
+        "values": {
+          "active_min": 55
+        }
+      },
+      "days_until_compare": 3
+    },
+    {
+      "id": "sleep",
+      "status": "collecting",
+      "alert": null,
+      "daily": {
+        "text_key": "sleep.daily",
+        "values": {
+          "sleep_min": 610,
+          "quality": "good"
+        }
+      },
+      "days_until_compare": 3
+    },
+    {
+      "id": "skin",
+      "status": "collecting",
+      "alert": null,
+      "daily": null,
+      "days_until_compare": 3
+    },
+    {
+      "id": "physio",
+      "status": "collecting",
+      "alert": null,
+      "daily": {
+        "text_key": "physio.daily",
+        "values": {
+          "rest_hr": 90,
+          "rest_rr": 19
+        }
+      },
+      "days_until_compare": 3
+    }
+  ]
+}

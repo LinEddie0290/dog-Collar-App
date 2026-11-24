@@ -11,9 +11,11 @@ import 'app_colors.dart';
 import 'devices_page.dart';
 import 'vitals_history_page.dart';
 import 'widgets/beat_chart.dart';
+import 'widgets/condition_editor_sheet.dart';
 import 'widgets/export_button.dart';
 import 'widgets/raw_export_button.dart';
 import 'widgets/live_wave_chart.dart';
+import 'widgets/rhythm_strip_view.dart';
 
 /// 心拍測定の画面。
 ///
@@ -195,7 +197,7 @@ class _BigButton extends StatelessWidget {
             ? Icons.bluetooth_searching
             : analyzing
                 ? Icons.hourglass_bottom
-                : Icons.favorite;
+                : Icons.favorite_border;
 
     // 外枠表示にするのは測定中と準備中。どちらも「もう一度押せば止まる」状態。
     final bool outlined = measuring || preparing;
@@ -251,7 +253,7 @@ class _BigButton extends StatelessWidget {
                 Icon(icon,
                     size: 42,
                     color:
-                        outlined ? AppColors.accent : const Color(0xFFFFF7EF)),
+                        outlined ? AppColors.accent : AppColors.onHero),
                 const SizedBox(height: 10),
                 Text(label,
                     style: TextStyle(
@@ -259,7 +261,7 @@ class _BigButton extends StatelessWidget {
                       fontWeight: FontWeight.w800,
                       color: outlined
                           ? AppColors.accent
-                          : const Color(0xFFFFF7EF),
+                          : AppColors.onHero,
                     )),
                 if (sub != null)
                   Padding(
@@ -271,7 +273,7 @@ class _BigButton extends StatelessWidget {
                                 measuring ? FontWeight.w700 : FontWeight.w400,
                             color: outlined
                                 ? AppColors.textSecondary
-                                : const Color(0xFFFFF7EF)
+                                : AppColors.onHero
                                     .withValues(alpha: 0.85))),
                   ),
               ],
@@ -353,16 +355,23 @@ class _LiveCard extends StatelessWidget {
               padding: const EdgeInsets.only(top: 10),
               child: Text(s.rateTooLowWarning,
                   style:
-                      const TextStyle(fontSize: 12, color: AppColors.accent)),
+                      const TextStyle(fontSize: 12, color: AppColors.warn)),
             ),
           // 2つの数え方が食い違ったら、その場で言う。あとで履歴を見て
           // 「あの数字は何だったのか」と考えることになるのを避ける。
+          if (r != null && r.rateFromBeats)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text(s.rateFromBeatsNote,
+                  style: const TextStyle(
+                      fontSize: 11.5, color: AppColors.textSecondary)),
+            ),
           if (r != null && r.rateDisagrees)
             Padding(
               padding: const EdgeInsets.only(top: 10),
               child: Text(s.rateDisagreeWarning,
                   style: const TextStyle(
-                      fontSize: 12, height: 1.5, color: AppColors.accent)),
+                      fontSize: 12, height: 1.5, color: AppColors.warn)),
             ),
           const Divider(height: 22, color: AppColors.divider),
           Wrap(
@@ -385,7 +394,7 @@ class _LiveCard extends StatelessWidget {
               padding: const EdgeInsets.only(top: 10),
               child: Text(s.tooManyDropsWarning,
                   style:
-                      const TextStyle(fontSize: 12, color: AppColors.accent)),
+                      const TextStyle(fontSize: 12, color: AppColors.warn)),
             ),
         ],
       ),
@@ -441,19 +450,19 @@ class _ResultCard extends StatelessWidget {
               child: Container(
                 padding: const EdgeInsets.all(11),
                 decoration: BoxDecoration(
-                  color: AppColors.accent.withValues(alpha: 0.07),
+                  color: AppColors.warn.withValues(alpha: 0.07),
                   borderRadius: BorderRadius.circular(11),
                 ),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
                     const Icon(Icons.info_outline,
-                        size: 16, color: AppColors.accent),
+                        size: 16, color: AppColors.warn),
                     const SizedBox(width: 7),
                     Expanded(
                       child: Text(_caveatText(s, record)!,
                           style: const TextStyle(
-                              fontSize: 12.5, color: AppColors.accent)),
+                              fontSize: 12.5, color: AppColors.warn)),
                     ),
                   ],
                 ),
@@ -474,23 +483,40 @@ class _ResultCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 16),
-          Text(s.beatIntervalsTitle,
+          Text(
+              record?.rhythmStripFile != null
+                  ? s.rhythmStripTitle
+                  : s.beatIntervalsTitle,
               style: const TextStyle(
                   fontSize: 12.5,
                   fontWeight: FontWeight.w700,
                   color: AppColors.textSecondary)),
           const SizedBox(height: 6),
-          BeatIntervalChart(
-              intervalsMs: result.beatIntervalsMs, emptyLabel: s.noDataYet),
+          if (record?.rhythmStripFile != null && session != null)
+            RhythmStripView(record: record!, store: session!.store, s: s)
+          else
+            BeatIntervalChart(
+                intervalsMs: result.beatIntervalsMs, emptyLabel: s.noDataYet),
+          if (result.rateFromBeats)
+            Padding(
+              padding: const EdgeInsets.only(top: 10),
+              child: Text(s.rateFromBeatsNote,
+                  style: const TextStyle(
+                      fontSize: 12, color: AppColors.textSecondary)),
+            ),
           if (result.rateDisagrees)
             Padding(
               padding: const EdgeInsets.only(top: 12),
               child: Text(s.rateDisagreeWarning,
                   style: const TextStyle(
-                      fontSize: 12, height: 1.5, color: AppColors.accent)),
+                      fontSize: 12, height: 1.5, color: AppColors.warn)),
             ),
           if (record != null) ...<Widget>[
             const Divider(height: 20, color: AppColors.divider),
+            if (session != null)
+              _ConditionSummaryRow(
+                  record: record!, s: s, store: session!.store),
+            const SizedBox(height: 4),
             Text(s.exportThisRecord,
                 style: const TextStyle(
                     fontSize: 11.5,
@@ -533,7 +559,7 @@ class _QualityChip extends StatelessWidget {
       VitalsQuality.fair =>
         (s.qualityFair, AppColors.accent2, Icons.error_outline),
       VitalsQuality.unusable =>
-        (s.qualityUnusable, AppColors.accent, Icons.cancel),
+        (s.qualityUnusable, AppColors.warn, Icons.cancel),
     };
     // 色だけで意味を伝えない。アイコンと文字を必ず添える。
     return Container(
@@ -644,6 +670,81 @@ class _FooterLink extends StatelessWidget {
       );
 }
 
+class _ConditionSummaryRow extends StatefulWidget {
+  const _ConditionSummaryRow(
+      {required this.record, required this.s, required this.store});
+  final MeasurementRecord record;
+  final AppStrings s;
+  final MeasurementStore store;
+
+  @override
+  State<_ConditionSummaryRow> createState() => _ConditionSummaryRowState();
+}
+
+class _ConditionSummaryRowState extends State<_ConditionSummaryRow> {
+  // annotate() はファイルを書き換えるだけで record を返さないので、保存した
+  // 内容をここに持って表示に使う。測定直後の画面をまるごと作り直させない
+  // ための工夫。
+  late MeasurementRecord _record = widget.record;
+
+  Future<void> _open() async {
+    final bool saved = await ConditionEditorSheet.show(
+      context,
+      record: _record,
+      store: widget.store,
+    );
+    if (!saved || !mounted) return;
+    final List<MeasurementRecord> all = await widget.store.loadAll();
+    MeasurementRecord? updated;
+    for (final MeasurementRecord r in all) {
+      if (r.id == _record.id) {
+        updated = r;
+        break;
+      }
+    }
+    if (updated != null && mounted) setState(() => _record = updated!);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final AppStrings s = widget.s;
+    final MeasurementRecord r = _record;
+    final List<String> parts = <String>[
+      if (r.posture != null) r.posture!,
+      if (r.panting != null) (r.panting! ? s.pantingLabel : ''),
+      if (r.recentActivity != null) r.recentActivity!,
+      if (r.referenceBpm != null)
+        '${s.referenceBpmLabel} ${r.referenceBpm!.toStringAsFixed(0)} bpm',
+    ].where((String v) => v.isNotEmpty).toList(growable: false);
+
+    return InkWell(
+      onTap: _open,
+      borderRadius: BorderRadius.circular(10),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 6),
+        child: Row(
+          children: <Widget>[
+            const Icon(Icons.tune, size: 15, color: AppColors.textFaint),
+            const SizedBox(width: 6),
+            Expanded(
+              child: Text(
+                parts.isEmpty ? s.editConditionAction : parts.join('　'),
+                style: TextStyle(
+                    fontSize: 12,
+                    color: parts.isEmpty
+                        ? AppColors.accent
+                        : AppColors.textSecondary),
+              ),
+            ),
+            const Icon(Icons.chevron_right,
+                size: 15, color: AppColors.textFaint),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _Metric extends StatelessWidget {
   const _Metric(this.label, this.value);
   final String label;
@@ -688,6 +789,8 @@ class _Card extends StatelessWidget {
 String? _caveatText(AppStrings s, MeasurementRecord? r) =>
     switch (r?.caveatCode) {
       'unusable' => s.caveatUnusable,
+      'irregular' => s.caveatIrregular,
+      'intermittent' => s.caveatIntermittent,
       'rate_disagrees' => s.caveatRateDisagrees,
       'fair' => s.caveatFair,
       'gaps' => s.caveatManyGaps,
