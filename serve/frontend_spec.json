@@ -1,6 +1,8 @@
 {
   "_comment": "CED-tiny (mispeech/ced-tiny rev ace276d2) front-end, read from source NOT memory. Sources: models/ced-tiny/feature_extraction_ced.py (CedFeatureExtractor), preprocessor_config.json, config.json, and runtime introspection of torchaudio 2.4.1 MelSpectrogram/AmplitudeToDB. This is the standard the collar C log-mel must match.",
   "produced": "2026-11-18",
+  "model_freeze_tag": "model-freeze-2026-11",
+  "model_freeze_note": "A/B weights (serve/checkpoints/*.pkl), heads, and thresholds (serve/config.yaml) + CED-tiny sha256 pins (serve/weights_manifest.json) are frozen at git tag model-freeze-2026-11. ALL collar-data evaluation must run against this tag.",
   "sample_rate": 16000,
   "input": "float32 mono PCM in [-1,1] (collar int16 / 32768.0). Model inference unit = a W-second window (presence 1.0s, type 2.0s), cropped with zero-pad past edges (serve/embed.py::crop) BEFORE the front-end.",
 
