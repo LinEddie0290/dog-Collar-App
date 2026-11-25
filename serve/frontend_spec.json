@@ -72,6 +72,24 @@
     }
   ],
 
+  "transport": {
+    "_comment": "Collar upload CONTRACT for the pre-top_db log-mel. CHOSEN FORMAT = int8 per-segment (TRANSPORT.md: 30-session onset F1 delta vs lossless presence -0.0046 / type7 +0.0069, both <0.01; 6408 B/s = 0.20x PCM16, smallest). Implemented in serve/transport.py; evaluated end-to-end by eval_collar.py --input logmel --transport int8_seg.",
+    "format": "int8_per_segment",
+    "payload": "pre-top_db log-mel [T,64] float = 10*log10(max(mel_power,1e-10)); top_db applied SERVER-side per encode window, NOT on the collar",
+    "quantization": {
+      "per_segment_of": "seg_frames = round(seg_len_s * 16000 / 160) consecutive frames, over ALL 64 bins of the segment",
+      "offset": "float32 = min(segment)",
+      "scale": "float32 = (max(segment) - offset) / 255.0 ; if <=0 (silent segment) -> 1.0",
+      "quantize": "q_uint8 = clip(round((x - offset) / scale), 0, 255)",
+      "dequantize_server": "x_hat = q_uint8 * scale + offset"
+    },
+    "wire_layout_per_segment": "q [seg_frames,64] uint8 (row-major), then offset float32 LE, then scale float32 LE",
+    "seg_len_s": {"default": 1.0, "note": "parameter; collar segments the CONTINUOUS stream at fixed seg_len_s, independent of the server's 1s/2s encode windows. 1.0s = 100 frames."},
+    "bytes_per_sec": "64*100*1 + (per 1s seg) 8 = 6408 B/s (vs PCM16 32000, lossless-f32 logmel 25600)",
+    "alternatives_measured": "fp16 (12800 B/s, Δpres 0 / Δtype7 +0.0059) also decision-safe; int8_frame type7 +0.0117 (>0.01) and larger -> rejected; adpcm_ima presence -0.043 -> rejected. See serve/TRANSPORT.md.",
+    "nearfield_caveat": "NearFieldCheck needs waveform loudness (peak/margin); a log-mel-ONLY upload cannot provide it per-frame. If wearer verification is enabled, the upload must add a loudness channel (e.g. per-frame RMS dBFS). Flagged in SERVICE_PLAN.md."
+  },
+
   "pcm_scaling": {
     "int16_to_float": "x_float = x_int16.astype(float32) / 32768.0  (serve/embed.py::to_float_mono_16k; divide by 32768, NOT 32767)",
     "mono": "multi-channel averaged to mono before scaling",

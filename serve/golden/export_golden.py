@@ -33,30 +33,27 @@ def _load16k(p):
     return x
 
 
-def _first_dog(cat):
-    import csv
-    for r in csv.DictReader(open(os.path.join(DATA, "ESC-50-master/meta/esc50.csv"))):
-        if r["category"] == cat:
-            return os.path.join(DATA, "ESC-50-master/audio", r["filename"])
-    return None
-
-
 def pick_clips():
-    """silence, normal bark, clipped-loud bark, + snoring + cough (varied)."""
-    sr = 16000
-    out = []
-    out.append(("silence", np.zeros(2 * sr, np.float32)))
-    bark = _load16k(_first_dog("dog"))[: 2 * sr]
-    bark = np.pad(bark, (0, max(0, 2 * sr - len(bark))))
-    out.append(("bark_normal", bark.astype(np.float32)))
-    out.append(("bark_clipped", np.clip(bark * 16.0, -1.0, 1.0).astype(np.float32)))
-    import csv
-    man = {r["class"]: os.path.join("/NVme2/aidi/collar-audio", r["path"])
-           for r in csv.DictReader(open(os.path.join(DATA, "dog_health/manifest.csv")))}
-    for cls in ("snoring", "cough"):
-        if cls in man and os.path.isfile(man[cls]):
-            x = _load16k(man[cls])[: 2 * sr]
-            out.append((cls, np.pad(x, (0, max(0, 2 * sr - len(x)))).astype(np.float32)))
+    """SYNTHETIC numerical test vectors — deliberately NOT real dataset audio.
+
+    The golden set is a log-mel NUMERICAL contract; the C side only needs inputs
+    that exercise the front-end across amplitude / spectral range. Using synthetic
+    signals (vs ESC-50 / dog_health clips, which are CC BY-NC / research-only) keeps
+    this committed artifact free of third-party licensed audio. Covers the asked-for
+    cases: silence, a 'voiced' burst, a clipped-loud burst, plus broadband + a
+    full-band sweep so every mel bin is driven."""
+    sr = 16000; n = 2 * sr
+    t = np.arange(n) / sr
+    rng = np.random.default_rng(0)
+    out = [("silence", np.zeros(n, np.float32))]
+    voiced = (0.3 * np.sin(2 * np.pi * 300 * t) + 0.15 * np.sin(2 * np.pi * 600 * t)
+              + 0.08 * np.sin(2 * np.pi * 1200 * t)) * (0.5 + 0.5 * np.sin(2 * np.pi * 4 * t))
+    out.append(("voiced_burst", voiced.astype(np.float32)))
+    out.append(("clipped_loud", np.clip(voiced * 16.0, -1.0, 1.0).astype(np.float32)))
+    out.append(("pink_noise", (rng.standard_normal(n) * 0.1).astype(np.float32)))
+    k = (sr / 160.0)
+    phase = 2 * np.pi * 100.0 * (((6000.0 / 100.0) ** (t / t[-1]) - 1) / np.log(6000.0 / 100.0)) * t[-1]
+    out.append(("chirp_100_6k", (0.5 * np.sin(phase)).astype(np.float32)))
     return out
 
 

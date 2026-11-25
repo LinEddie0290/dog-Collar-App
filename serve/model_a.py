@@ -162,3 +162,45 @@ class ModelA:
                 "_emb": emb,   # CED [mean,max] of the bout; consumed by Model B (arousal), not for the App
             })
         return events
+
+    def detect_from_logmel(self, logmel, transport="float32", seg_len_s=1.0):
+        """Same detection as detect(), but from a collar-uploaded PRE-top_db log-mel
+        stream [T, 64] instead of a waveform. `transport` applies the upload format's
+        loss (float32 / fp16 / int8_seg; see transport.py) to the whole stream BEFORE
+        windowing, so the eval runs the real wire format. Heads / thresholds / class_map
+        are the SAME as detect(); only the embedding source differs (encode_from_logmel).
+        """
+        import ref_logmel as RL
+        import transport as TP
+        lm = TP.roundtrip(np.asarray(logmel, np.float32), transport, seg_len_s)
+        dur = len(lm) * RL.HOP / RL.SR
+        hop = self.cfg["hop_s"]
+
+        def stream(W):
+            centers = np.arange(W / 2, max(W / 2, dur - W / 2) + 1e-9, hop)
+            E = np.zeros((len(centers), self.emb.dim), np.float32)
+            for i, c in enumerate(centers):
+                k0, k1 = RL.frames_for_window(float(c), W)
+                E[i] = self.emb.encode_from_logmel(lm[k0:k1 + 1])
+            return E, centers
+
+        Ep, cp = stream(self.cfg["presence_window_s"])
+        p = presence_score(Ep, self.presence)
+        bouts = predict_bouts(p, cp, self.cfg["cfg"], self.cfg["gap_s"])
+        if not bouts:
+            return []
+        Et, ct = stream(self.cfg["type_window_s"])
+        Pt = type7_proba(Et, self.type7)
+        events = []
+        for a, b in bouts:
+            mp = (cp >= a) & (cp <= b)
+            pres = float(p[mp].mean()) if mp.any() else float(p[np.argmin(np.abs(cp - (a + b) / 2))])
+            mt = (ct >= a) & (ct <= b)
+            probs = Pt[mt].mean(0) if mt.any() else Pt[np.argmin(np.abs(ct - (a + b) / 2))]
+            j = int(np.argmax(np.log(probs + 1e-12) + self.bias))
+            cls = self.labels[j]
+            emb = Et[mt].mean(0) if mt.any() else Et[np.argmin(np.abs(ct - (a + b) / 2))]
+            events.append({"start_ms": int(round(a * 1000)), "end_ms": int(round(b * 1000)),
+                           "class": cls, "prob": round(float(probs[j]), 3), "presence": round(pres, 3),
+                           "app_slot": self.cfg["class_map"].get(cls), "_emb": emb})
+        return events
