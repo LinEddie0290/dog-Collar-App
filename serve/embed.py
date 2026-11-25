@@ -117,3 +117,22 @@ class CEDEmbedder:
         for i, c in enumerate(centers):
             E[i] = self.embed_window(crop(wav, float(c), W))
         return E, centers
+
+    # ----- log-mel input path (collar uploads pre-top_db log-mel, not waveform) --
+    def encode_from_logmel(self, logmel, apply_top_db: bool = True, top_db: float = 120.0):
+        """Embed one encoding window from a PRECOMPUTED PRE-top_db log-mel, skipping
+        the waveform front-end. `logmel`: [T, n_mels=64] time-major (ref_logmel stream
+        slice / collar upload). The top_db=120 clamp is a WHOLE-WINDOW op the collar
+        cannot do per frame, so the server applies it here over THIS encoding window
+        (frontend_spec.json whole_segment_dependent). Everything after is identical to
+        embed_window: same CED encoder, same [mean,max] pooling. Waveform path and
+        heads are untouched."""
+        x = np.asarray(logmel, np.float32)
+        if x.ndim != 2 or x.shape[1] != 64:
+            raise ValueError(f"logmel must be [T, 64], got {x.shape}")
+        if apply_top_db:
+            x = np.maximum(x, x.max() - top_db)           # per encoding-window clamp
+        iv = self._torch.from_numpy(x.T[None, :, :]).to(next(self.enc.parameters()).device)  # [1,64,T]
+        with self._torch.no_grad():
+            h = self.enc(iv)[0][0].detach().cpu().numpy()
+        return np.concatenate([h.mean(0), h.max(0)]).astype(np.float32)

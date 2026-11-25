@@ -82,6 +82,15 @@
     "note": "the only thing before MelSpectrogram is int16/32768 scaling + mono + (optional) resample. Confirmed by reading serve/embed.py and feature_extraction_ced.py."
   },
 
+  "c_side_tolerance_baseline": {
+    "_comment": "|dB| abs error of HF(float32 torchaudio) vs ref_logmel.window(float64)+top_db, over 60 varied clips (dog_health classes + ESC-50), 319k bins. ref(float64) is the higher-precision golden; this spread IS the model's own float32 rounding, amplified by 10*log10. The raw 1e-5 per-element bar is NOT reachable by a pure-numpy ref vs a float32 model (numpy float32 FFT != torch float32 STFT, ~1.9e-4). Verified separately: ref STFT power matches torch to 1e-14, so ref math is exact.",
+    "metric": "max abs error in dB (post-top_db)",
+    "all_bin":        {"mean": 3.47e-06, "p99": 4.96e-05, "p99_9": 1.564e-04, "max": 2.937e-03},
+    "meaningful_bin_gt_peak_minus_80dB": {"mean": 3.49e-06, "p99": 4.96e-05, "p99_9": 1.564e-04, "max": 1.232e-03},
+    "c_acceptance": "C-impl (fixed/float) vs ref_logmel.stream: each statistic (mean/p99/p99.9/max) must be <= 3x the matching baseline above. If exceeded, fall back to the DECISION-level gate (encode_from_logmel embedding cosine + type7 top-1 agreement; see compare.py) as the final criterion.",
+    "binding_gate": "decision-level: embedding cosine, type7 top-1 >=99%, onset/7-class F1 delta <0.01 (ref is float64 golden; raw dB error is diagnostic only)."
+  },
+
   "placement_conclusion": {
     "on_collar_pure_per_frame": ["reflect-pad+framing (win 512/hop 160/hann periodic)", "power spectrogram |rFFT|^2 (257 bins)", "mel filterbank 257->64 (htk, norm=None, fmin0 fmax8000)", "10*log10(max(.,1e-10))"],
     "must_be_server_side": ["top_db=120 window-max clamp (window-global)", "init_bn + split/pad + patch_embed + transformer (the encoder itself)"],

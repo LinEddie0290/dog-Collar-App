@@ -1,0 +1,42 @@
+{
+ "input_pcm16.bin": {
+  "dtype": "int16_le",
+  "shape": [
+   32000
+  ],
+  "scale": "x_float*32768"
+ },
+ "ref_logmel": {
+  "dtype": "float32_le",
+  "shape": [
+   201,
+   64
+  ],
+  "order": "row-major [T,64], PRE-top_db (10*log10(max(mel,1e-10)))"
+ },
+ "frames_first3": {
+  "dtype": "float32_le",
+  "shape": [
+   3,
+   512
+  ],
+  "order": "[frame,512] after hann-periodic window, center reflect pad"
+ },
+ "power_first3": {
+  "dtype": "float32_le",
+  "shape": [
+   3,
+   257
+  ],
+  "order": "[frame,257] |rfft|^2"
+ },
+ "mel_first3": {
+  "dtype": "float32_le",
+  "shape": [
+   3,
+   64
+  ],
+  "order": "[frame,64] power @ fb (pre-log)"
+ },
+ "fb_contract": "../ced_mel_fb_64x257.bin [64,257] float32 row-major"
+}
